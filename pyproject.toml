@@ -1,0 +1,49 @@
+[project]
+name = "audiobook-mcp"
+version = "0.2.0"
+description = "MCP server for orchestrating full-cast audiobook production with AI voice synthesis"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "requests>=2.28.0",
+    # Audio processing
+    "pydub>=0.25.0",
+    "soundfile>=0.12.0",
+]
+
+[project.optional-dependencies]
+# Maya1 TTS support
+maya1 = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "snac",
+]
+# Fish Speech TTS support
+fish-speech = [
+    "fish-audio-sdk>=1.0.0",
+]
+# All TTS engines
+tts = [
+    "audiobook-mcp[maya1,fish-speech]",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+audiobook-mcp = "audiobook_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["audiobook_mcp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

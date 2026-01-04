@@ -1,44 +1,44 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN npm ci
+# Copy project files
+COPY pyproject.toml ./
+COPY audiobook_mcp ./audiobook_mcp
 
-# Copy source code
-COPY tsconfig.json ./
-COPY src ./src
-
-# Build TypeScript
-RUN npm run build
+# Install the package
+RUN pip install --no-cache-dir .
 
 # Production stage
-FROM node:20-alpine
+FROM python:3.11-slim
 
 # Install ffmpeg for audio processing
-RUN apk add --no-cache ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files and install production dependencies only
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin/audiobook-mcp /usr/local/bin/audiobook-mcp
 
-# Copy built files from builder
-COPY --from=builder /app/dist ./dist
+# Copy application code
+COPY audiobook_mcp ./audiobook_mcp
 
 # Create a non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S mcp -u 1001 -G nodejs
+RUN useradd -m -u 1001 mcp
 
 # Create directory for project data (can be mounted as volume)
-RUN mkdir -p /projects && chown -R mcp:nodejs /projects
+RUN mkdir -p /projects && chown -R mcp:mcp /projects
 
 USER mcp
 
 # MCP servers communicate via stdio
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["audiobook-mcp"]
