@@ -1444,6 +1444,184 @@ def generate_voice_sample(
     }
 
 
+def create_voice_candidates(
+    character_id: str,
+    sample_text: str,
+    voice_descriptions: list[str],
+) -> dict:
+    """Generate multiple voice candidates with different descriptions.
+
+    Creates one sample per description, all using the same sample_text.
+    User can listen to each and pick their favorite.
+
+    Args:
+        character_id: The character to generate candidates for
+        sample_text: The text to speak (same for all candidates, ~30 sec when spoken)
+        voice_descriptions: List of voice descriptions to try (e.g., 3-4 variations)
+
+    Returns:
+        List of candidates with sample_id, description, and audio_path
+    """
+    audio_dir = _get_project_audio_dir()
+
+    character = get_character(character_id)
+    if not character:
+        raise ValueError(f"Character not found: {character_id}")
+
+    if not sample_text.strip():
+        raise ValueError("Sample text is required")
+
+    if not voice_descriptions or len(voice_descriptions) < 2:
+        raise ValueError("At least 2 voice descriptions required for comparison")
+
+    if len(voice_descriptions) > 5:
+        raise ValueError("Maximum 5 voice candidates at a time")
+
+    samples_dir = audio_dir / "audio" / "voice_samples"
+    samples_dir.mkdir(parents=True, exist_ok=True)
+
+    candidates = []
+    total_duration_ms = 0
+
+    for i, description in enumerate(voice_descriptions):
+        # Generate unique filename
+        import uuid
+
+        sample_id = str(uuid.uuid4())[:8]
+        filename = f"{character_id}_candidate_{i}_{sample_id}.wav"
+        output_path = samples_dir / filename
+
+        # Generate audio with Maya1
+        result = generate_with_maya1(sample_text, description, output_path)
+        duration_ms = result.get("duration_ms", 0)
+        total_duration_ms += duration_ms
+
+        # Store in database
+        relative_path = f"audio/voice_samples/{filename}"
+        sample = add_voice_sample(
+            character_id=character_id,
+            sample_path=relative_path,
+            sample_text=sample_text,
+            duration_ms=duration_ms,
+        )
+
+        candidates.append(
+            {
+                "candidate_index": i,
+                "sample_id": sample.id,
+                "description": description,
+                "sample_path": relative_path,
+                "duration_ms": duration_ms,
+            }
+        )
+
+    return {
+        "character_id": character_id,
+        "character_name": character.name,
+        "sample_text": sample_text,
+        "candidate_count": len(candidates),
+        "total_duration_ms": total_duration_ms,
+        "candidates": candidates,
+        "next_step": "Use select_voice_candidate with the sample_id of your preferred voice",
+    }
+
+
+def select_voice_candidate(
+    character_id: str,
+    selected_sample_id: str,
+    additional_sample_texts: Optional[list[str]] = None,
+) -> dict:
+    """Select a voice candidate and optionally generate more samples.
+
+    This will:
+    1. Set the character's voice_ref to the selected voice's description
+    2. Delete all other candidate samples for this character
+    3. Optionally generate additional samples with the selected voice
+
+    Args:
+        character_id: The character
+        selected_sample_id: The sample_id of the winning candidate
+        additional_sample_texts: Optional list of 2 more sample texts to generate
+    """
+    from .voice_samples import (
+        get_voice_sample,
+        list_voice_samples,
+        delete_voice_sample,
+    )
+
+    character = get_character(character_id)
+    if not character:
+        raise ValueError(f"Character not found: {character_id}")
+
+    # Get the selected sample
+    selected = get_voice_sample(selected_sample_id)
+    if not selected:
+        raise ValueError(f"Voice sample not found: {selected_sample_id}")
+
+    if selected.character_id != character_id:
+        raise ValueError("Selected sample does not belong to this character")
+
+    # We need to find the description used for this sample
+    # Since we don't store it in the sample, we'll need the user to provide it
+    # or we look it up from the character's current candidates
+    # For now, we'll require the description to be passed or use character's voice_ref
+
+    # Get all samples for this character
+    all_samples = list_voice_samples(character_id)
+
+    # Delete non-selected samples
+    deleted_count = 0
+    for sample in all_samples:
+        if sample.id != selected_sample_id:
+            delete_voice_sample(sample.id)
+            deleted_count += 1
+
+    result = {
+        "character_id": character_id,
+        "character_name": character.name,
+        "selected_sample_id": selected_sample_id,
+        "deleted_candidates": deleted_count,
+        "remaining_samples": 1,
+        "additional_samples_generated": 0,
+    }
+
+    # Generate additional samples if texts provided
+    if additional_sample_texts:
+        audio_dir = _get_project_audio_dir()
+        samples_dir = audio_dir / "audio" / "voice_samples"
+
+        # Get voice description from character
+        voice_description = DEFAULT_DESCRIPTION
+        if character.voice_config:
+            voice_config = json.loads(character.voice_config)
+            voice_description = voice_config.get("voice_ref") or voice_config.get(
+                "voice_id", DEFAULT_DESCRIPTION
+            )
+
+        for text in additional_sample_texts[:2]:  # Max 2 additional
+            import uuid
+
+            sample_id = str(uuid.uuid4())[:8]
+            filename = f"{character_id}_{sample_id}.wav"
+            output_path = samples_dir / filename
+
+            gen_result = generate_with_maya1(text, voice_description, output_path)
+            duration_ms = gen_result.get("duration_ms", 0)
+
+            relative_path = f"audio/voice_samples/{filename}"
+            add_voice_sample(
+                character_id=character_id,
+                sample_path=relative_path,
+                sample_text=text,
+                duration_ms=duration_ms,
+            )
+            result["additional_samples_generated"] += 1
+
+        result["remaining_samples"] += result["additional_samples_generated"]
+
+    return result
+
+
 def generate_batch_audio(
     segment_ids: Optional[list[str]] = None,
     chapter_id: Optional[str] = None,

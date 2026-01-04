@@ -73,6 +73,8 @@ from .tools.tts import (
     download_maya1_models,
     get_model_status,
     build_voice_description,
+    create_voice_candidates,
+    select_voice_candidate,
 )
 from .tools.import_tools import (
     import_chapter_text,
@@ -481,7 +483,51 @@ The system uses a **two-stage TTS workflow**:
 
 Maya1 is a **voice design** engine - it creates unique voices from natural language descriptions.
 
-### Step 1.1: Set Character Voice Description
+### Option A: Voice Candidate Selection (Recommended)
+
+Use this when you want to try multiple voice variations and pick the best one:
+
+**Step 1: Generate Voice Candidates**
+
+Create 3-4 variations of the voice description:
+
+```
+generate_voice_candidates(
+    character_id="...",
+    sample_text="A longer piece of text (~50-100 words) that showcases the voice...",
+    voice_descriptions=[
+        "Realistic male voice in the 30s with american accent. Low pitch, warm timbre, measured pacing.",
+        "Realistic male voice in the 30s with american accent. Medium-low pitch, gravelly timbre, slow pacing.",
+        "Realistic male voice in the 40s with american accent. Low pitch, warm timbre, conversational pacing."
+    ]
+)
+```
+
+**Step 2: Listen to Candidates**
+
+Each candidate generates an audio file. Listen to each and pick your favorite.
+
+**Step 3: Select the Winner**
+
+```
+choose_voice_candidate(
+    character_id="...",
+    selected_sample_id="<sample_id of preferred voice>",
+    additional_sample_texts=[
+        "Additional sample showing emotional range...",
+        "Another sample with conversational dialogue..."
+    ]
+)
+```
+
+This will:
+- Delete all other candidates
+- Optionally generate 2 more samples with the selected voice
+- Result in 3 high-quality voice samples for cloning
+
+### Option B: Direct Sample Creation
+
+Use this when you're confident about the voice description:
 
 ```
 set_character_voice(
@@ -489,16 +535,10 @@ set_character_voice(
     provider="maya1",
     voice_ref="Realistic female voice in the 30s age with american accent. Medium pitch, warm timbre, measured pacing, professional tone."
 )
-```
 
-### Step 1.2: Generate Voice Samples
-
-Provide 3 in-character sample scripts (~30 seconds each when spoken):
-
-```
 create_voice_samples(
     character_id="...",
-    voice_description="...",  # or uses voice_ref from character
+    voice_description="...",
     sample_texts=[
         "Sample 1: Calm narration or reflection...",
         "Sample 2: Emotional speech with <laugh> or <angry> tags...",
@@ -506,8 +546,6 @@ create_voice_samples(
     ]
 )
 ```
-
-This generates 3 WAV files stored as voice samples for the character.
 
 ## Stage 2: Generate Segment Audio with Chatterbox
 
@@ -551,6 +589,8 @@ Add paralinguistic tags to segment text:
 
 | Task | Tool | Engine |
 |------|------|--------|
+| Generate voice candidates | `generate_voice_candidates` | Maya1 |
+| Select preferred voice | `choose_voice_candidate` | Maya1 |
 | Set voice description | `set_character_voice` | - |
 | Create voice samples | `create_voice_samples` | Maya1 |
 | Generate segment audio | `generate_audio_for_segment` | Chatterbox |
@@ -1026,6 +1066,72 @@ def create_voice_samples(
             }
             for r in results
         ],
+    }
+
+
+@mcp.tool()
+def generate_voice_candidates(
+    character_id: str,
+    sample_text: str,
+    voice_descriptions: list[str],
+) -> dict:
+    """Generate multiple voice candidates with slightly different descriptions.
+
+    Creates one sample per description, all using the same sample_text.
+    User can listen to each candidate and pick their favorite voice.
+
+    Workflow:
+    1. Call this with 3-4 voice description variations
+    2. Listen to each candidate audio file
+    3. Call select_voice_candidate with the sample_id of your preferred voice
+    4. Optionally generate 2 more samples with the selected voice
+
+    Args:
+        character_id: The character to generate candidates for.
+        sample_text: The text to speak (same for all candidates, ~50-100 words).
+        voice_descriptions: List of 2-5 voice descriptions to try (variations on a theme).
+
+    Example:
+        voice_descriptions: [
+            "Realistic male voice in the 30s with american accent. Low pitch, warm timbre, measured pacing.",
+            "Realistic male voice in the 30s with american accent. Medium-low pitch, gravelly timbre, slow pacing.",
+            "Realistic male voice in the 40s with american accent. Low pitch, warm timbre, conversational pacing."
+        ]
+    """
+    result = create_voice_candidates(character_id, sample_text, voice_descriptions)
+    return {
+        "success": True,
+        "message": f'Generated {result["candidate_count"]} voice candidates for "{result["character_name"]}"',
+        **result,
+    }
+
+
+@mcp.tool()
+def choose_voice_candidate(
+    character_id: str,
+    selected_sample_id: str,
+    additional_sample_texts: Optional[list[str]] = None,
+) -> dict:
+    """Select a voice candidate and optionally generate more samples.
+
+    After using generate_voice_candidates and listening to the options:
+    1. Call this with the sample_id of your preferred voice
+    2. All other candidates will be deleted
+    3. Optionally provide 2 additional sample texts to generate more reference audio
+
+    Args:
+        character_id: The character.
+        selected_sample_id: The sample_id of the winning candidate.
+        additional_sample_texts: Optional list of 2 more sample texts to generate
+            (for better voice cloning quality).
+    """
+    result = select_voice_candidate(character_id, selected_sample_id, additional_sample_texts)
+    return {
+        "success": True,
+        "message": f'Voice selected for "{result["character_name"]}". '
+        f"Deleted {result['deleted_candidates']} other candidates. "
+        f"{result['remaining_samples']} sample(s) ready for voice cloning.",
+        **result,
     }
 
 
