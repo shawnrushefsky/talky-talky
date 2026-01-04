@@ -1,0 +1,80 @@
+# Docker Compose for Audiobook MCP with Fish Speech TTS
+#
+# This configuration runs both the audiobook-mcp server and the Fish Speech
+# inference server together. Use this when you want voice cloning capabilities
+# without needing the Fish Audio cloud API.
+#
+# Usage:
+#   # For NVIDIA GPU (recommended):
+#   docker compose --profile cuda up -d
+#
+#   # For CPU only (slower):
+#   docker compose --profile cpu up -d
+#
+# The audiobook-mcp service is configured to connect to Fish Speech at
+# http://fish-speech:8080 automatically.
+
+services:
+  # Fish Speech inference server with NVIDIA GPU support
+  fish-speech-cuda:
+    image: fishaudio/fish-speech:latest-server-cuda
+    container_name: fish-speech
+    profiles: ["cuda"]
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - fish-speech-cache:/root/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Fish Speech inference server for CPU only
+  fish-speech-cpu:
+    image: fishaudio/fish-speech:latest-server
+    container_name: fish-speech
+    profiles: ["cpu"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - fish-speech-cache:/root/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Audiobook MCP server
+  # Note: MCP servers communicate via stdio, so this is primarily useful
+  # for building the image. For actual use, run with docker run -i.
+  audiobook-mcp:
+    build: .
+    image: audiobook-mcp:latest
+    profiles: ["build"]
+    environment:
+      - FISH_SPEECH_API_URL=http://fish-speech:8080
+    volumes:
+      - ./projects:/projects
+    depends_on:
+      fish-speech-cuda:
+        condition: service_healthy
+        required: false
+      fish-speech-cpu:
+        condition: service_healthy
+        required: false
+
+volumes:
+  fish-speech-cache:
+    name: fish-speech-model-cache

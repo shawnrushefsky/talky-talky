@@ -52,6 +52,10 @@ SAMPLE_RATE = 24000
 FISH_SPEECH_API_URL = os.environ.get("FISH_SPEECH_API_URL", "http://localhost:8080")
 FISH_AUDIO_API_KEY = os.environ.get("FISH_AUDIO_API_KEY", "")
 
+# Model identifiers for downloading
+MAYA1_MODEL_ID = "maya-research/maya1"
+SNAC_MODEL_ID = "hubertsiuzdak/snac_24khz"
+
 
 # ============================================================================
 # TTS Engine Management
@@ -85,6 +89,274 @@ class TTSCheckResult:
     vram_gb: Optional[float] = None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    setup_instructions: dict = field(default_factory=dict)
+
+
+# Installation and setup instructions
+MAYA1_SETUP_INSTRUCTIONS = """
+## Maya1 Setup (Voice Design)
+
+Maya1 requires PyTorch and related dependencies. Install with:
+
+```bash
+pip install "audiobook-mcp[maya1]"
+```
+
+Or manually:
+```bash
+pip install torch transformers snac
+```
+
+**Hardware Requirements:**
+- NVIDIA GPU with CUDA: Best performance (16GB+ VRAM recommended)
+- Apple Silicon (M1/M2/M3/M4): Supported via MPS (slower but works)
+- CPU: Supported but slow (not recommended for batch generation)
+"""
+
+FISH_SPEECH_LOCAL_SETUP_INSTRUCTIONS = """
+## Fish Speech Local Server Setup (Voice Cloning)
+
+Fish Speech requires running a separate inference server. Choose one method:
+
+### Option 1: Docker (Recommended)
+
+**For NVIDIA GPU:**
+```bash
+docker run -d \\
+  --name fish-speech \\
+  --gpus all \\
+  -p 8080:8080 \\
+  fishaudio/fish-speech:latest-server-cuda
+```
+
+**For CPU only:**
+```bash
+docker run -d \\
+  --name fish-speech \\
+  -p 8080:8080 \\
+  fishaudio/fish-speech:latest-server
+```
+
+### Option 2: Manual Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/fishaudio/fish-speech.git
+cd fish-speech
+
+# Install dependencies
+pip install -e .
+
+# Download model checkpoints
+huggingface-cli download fishaudio/openaudio-s1-mini --local-dir checkpoints/openaudio-s1-mini
+
+# Start the server
+python -m tools.api_server \\
+  --listen 0.0.0.0:8080 \\
+  --llama-checkpoint-path checkpoints/openaudio-s1-mini \\
+  --decoder-checkpoint-path checkpoints/openaudio-s1-mini/codec.pth \\
+  --decoder-config-name modded_dac_vq
+```
+
+### Configuration
+
+Set the server URL (default is http://localhost:8080):
+```bash
+export FISH_SPEECH_API_URL=http://localhost:8080
+```
+"""
+
+FISH_SPEECH_CLOUD_SETUP_INSTRUCTIONS = """
+## Fish Speech Cloud API Setup (Voice Cloning)
+
+The Fish Audio cloud API is the easiest option - no local server required.
+
+### Steps:
+
+1. Create an account at https://fish.audio
+2. Get your API key from the dashboard
+3. Set the environment variable:
+
+```bash
+export FISH_AUDIO_API_KEY=your_api_key_here
+```
+
+### Pricing
+
+Fish Audio offers pay-as-you-go pricing. Check https://fish.audio for current rates.
+"""
+
+
+@dataclass
+class ModelStatus:
+    """Status of a model's availability."""
+    model_id: str
+    downloaded: bool
+    cache_path: Optional[str] = None
+    size_gb: Optional[float] = None
+    error: Optional[str] = None
+
+
+def check_model_downloaded(model_id: str) -> ModelStatus:
+    """Check if a HuggingFace model is downloaded to the cache."""
+    try:
+        from huggingface_hub import try_to_load_from_cache, scan_cache_dir
+        from transformers import AutoConfig
+
+        # Try to load config to see if model is cached
+        try:
+            config_path = try_to_load_from_cache(model_id, "config.json")
+            if config_path is not None:
+                # Model is cached, get more info
+                cache_info = scan_cache_dir()
+                for repo in cache_info.repos:
+                    if repo.repo_id == model_id:
+                        size_gb = round(repo.size_on_disk / (1024**3), 2)
+                        return ModelStatus(
+                            model_id=model_id,
+                            downloaded=True,
+                            cache_path=str(repo.repo_path),
+                            size_gb=size_gb,
+                        )
+                return ModelStatus(model_id=model_id, downloaded=True)
+            else:
+                return ModelStatus(model_id=model_id, downloaded=False)
+        except Exception:
+            return ModelStatus(model_id=model_id, downloaded=False)
+
+    except ImportError:
+        return ModelStatus(
+            model_id=model_id,
+            downloaded=False,
+            error="huggingface_hub not installed",
+        )
+
+
+def download_maya1_models(force: bool = False) -> dict:
+    """Download Maya1 model weights from HuggingFace.
+
+    Downloads both the Maya1 language model and SNAC audio codec.
+    This may take a while depending on your internet connection (~10GB total).
+
+    Args:
+        force: If True, re-download even if models exist in cache.
+
+    Returns:
+        Status dict with download results for each model.
+    """
+    import sys
+
+    results = {
+        "maya1": {"status": "pending", "model_id": MAYA1_MODEL_ID},
+        "snac": {"status": "pending", "model_id": SNAC_MODEL_ID},
+    }
+
+    # Check if already downloaded
+    if not force:
+        maya1_status = check_model_downloaded(MAYA1_MODEL_ID)
+        snac_status = check_model_downloaded(SNAC_MODEL_ID)
+
+        if maya1_status.downloaded and snac_status.downloaded:
+            return {
+                "status": "already_downloaded",
+                "message": "All Maya1 models are already downloaded",
+                "models": {
+                    "maya1": {
+                        "status": "cached",
+                        "model_id": MAYA1_MODEL_ID,
+                        "cache_path": maya1_status.cache_path,
+                        "size_gb": maya1_status.size_gb,
+                    },
+                    "snac": {
+                        "status": "cached",
+                        "model_id": SNAC_MODEL_ID,
+                        "cache_path": snac_status.cache_path,
+                        "size_gb": snac_status.size_gb,
+                    },
+                },
+            }
+
+    # Download Maya1 model
+    try:
+        print(f"Downloading Maya1 model ({MAYA1_MODEL_ID})...", file=sys.stderr, flush=True)
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        # This will download and cache the model
+        AutoTokenizer.from_pretrained(MAYA1_MODEL_ID)
+        AutoModelForCausalLM.from_pretrained(MAYA1_MODEL_ID)
+
+        results["maya1"]["status"] = "downloaded"
+        print(f"Maya1 model downloaded successfully", file=sys.stderr, flush=True)
+
+    except Exception as e:
+        results["maya1"]["status"] = "error"
+        results["maya1"]["error"] = str(e)
+        print(f"Error downloading Maya1: {e}", file=sys.stderr, flush=True)
+
+    # Download SNAC codec
+    try:
+        print(f"Downloading SNAC codec ({SNAC_MODEL_ID})...", file=sys.stderr, flush=True)
+        import snac
+
+        # This will download and cache the model
+        snac.SNAC.from_pretrained(SNAC_MODEL_ID)
+
+        results["snac"]["status"] = "downloaded"
+        print(f"SNAC codec downloaded successfully", file=sys.stderr, flush=True)
+
+    except Exception as e:
+        results["snac"]["status"] = "error"
+        results["snac"]["error"] = str(e)
+        print(f"Error downloading SNAC: {e}", file=sys.stderr, flush=True)
+
+    # Determine overall status
+    all_success = all(r["status"] in ("downloaded", "cached") for r in results.values())
+    any_error = any(r["status"] == "error" for r in results.values())
+
+    return {
+        "status": "success" if all_success else ("partial" if not any_error else "error"),
+        "message": "Models downloaded successfully" if all_success else "Some models failed to download",
+        "models": results,
+    }
+
+
+def get_model_status() -> dict:
+    """Get the download status of all TTS models.
+
+    Returns information about which models are downloaded and their cache locations.
+    """
+    maya1_status = check_model_downloaded(MAYA1_MODEL_ID)
+    snac_status = check_model_downloaded(SNAC_MODEL_ID)
+
+    models = {
+        "maya1": {
+            "model_id": MAYA1_MODEL_ID,
+            "downloaded": maya1_status.downloaded,
+            "cache_path": maya1_status.cache_path,
+            "size_gb": maya1_status.size_gb,
+            "required_for": "voice design (creating voices from descriptions)",
+        },
+        "snac": {
+            "model_id": SNAC_MODEL_ID,
+            "downloaded": snac_status.downloaded,
+            "cache_path": snac_status.cache_path,
+            "size_gb": snac_status.size_gb,
+            "required_for": "audio decoding (used with Maya1)",
+        },
+    }
+
+    all_downloaded = maya1_status.downloaded and snac_status.downloaded
+
+    return {
+        "all_downloaded": all_downloaded,
+        "total_size_gb": sum(m.get("size_gb") or 0 for m in models.values()),
+        "models": models,
+        "download_instructions": None if all_downloaded else (
+            "Use the download_tts_models tool to download missing models, "
+            "or run: pip install audiobook-mcp[maya1] && python -c "
+            "'from audiobook_mcp.tools.tts import download_maya1_models; download_maya1_models()'"
+        ),
+    }
 
 
 def _get_best_device() -> tuple[str, Optional[str], Optional[float]]:
@@ -113,7 +385,10 @@ def _get_best_device() -> tuple[str, Optional[str], Optional[float]]:
 
 
 def check_tts() -> TTSCheckResult:
-    """Check if TTS engines are available and properly configured."""
+    """Check if TTS engines are available and properly configured.
+
+    Returns detailed status including setup instructions for any unavailable engines.
+    """
     result = TTSCheckResult(status="ok")
 
     # Check PyTorch and device
@@ -129,9 +404,10 @@ def check_tts() -> TTSCheckResult:
         result.vram_gb = vram_gb
 
         if device == "cpu":
-            result.warnings.append("No GPU detected - Maya1 will run on CPU (slower)")
+            result.warnings.append("No GPU detected - Maya1 will run on CPU (slower but functional)")
     except ImportError:
-        result.warnings.append("PyTorch not installed - Maya1 unavailable")
+        result.warnings.append("PyTorch not installed - Maya1 unavailable. Install with: pip install torch")
+        result.setup_instructions["maya1"] = MAYA1_SETUP_INSTRUCTIONS
 
     # Check Maya1 dependencies
     try:
@@ -139,24 +415,49 @@ def check_tts() -> TTSCheckResult:
         import snac
         result.maya1_available = True
     except ImportError as e:
-        result.warnings.append(f"Maya1 dependencies missing: {e}")
+        missing_pkg = str(e).split("'")[1] if "'" in str(e) else str(e)
+        result.warnings.append(f"Maya1 dependency missing: {missing_pkg}")
+        result.setup_instructions["maya1"] = MAYA1_SETUP_INSTRUCTIONS
 
     # Check Fish Speech local server
+    fish_speech_local_error = None
     try:
         response = requests.get(f"{FISH_SPEECH_API_URL}/", timeout=2)
-        result.fish_speech_local_available = response.status_code == 200
-    except Exception:
-        result.warnings.append(f"Fish Speech local server not available at {FISH_SPEECH_API_URL}")
+        if response.status_code == 200:
+            result.fish_speech_local_available = True
+        else:
+            fish_speech_local_error = f"Server returned status {response.status_code}"
+    except requests.exceptions.ConnectionError:
+        fish_speech_local_error = "Connection refused - server not running"
+    except requests.exceptions.Timeout:
+        fish_speech_local_error = "Connection timeout - server not responding"
+    except Exception as e:
+        fish_speech_local_error = str(e)
+
+    if fish_speech_local_error:
+        result.warnings.append(f"Fish Speech local server ({FISH_SPEECH_API_URL}): {fish_speech_local_error}")
 
     # Check Fish Speech cloud API
     if FISH_AUDIO_API_KEY:
         result.fish_speech_cloud_available = True
     else:
-        result.warnings.append("FISH_AUDIO_API_KEY not set - cloud API unavailable")
+        result.warnings.append("FISH_AUDIO_API_KEY environment variable not set")
 
+    # Add setup instructions for Fish Speech if neither option is available
+    if not result.fish_speech_local_available and not result.fish_speech_cloud_available:
+        result.setup_instructions["fish_speech_local"] = FISH_SPEECH_LOCAL_SETUP_INSTRUCTIONS
+        result.setup_instructions["fish_speech_cloud"] = FISH_SPEECH_CLOUD_SETUP_INSTRUCTIONS
+
+    # Determine overall status
     if not result.maya1_available and not result.fish_speech_local_available and not result.fish_speech_cloud_available:
         result.status = "error"
-        result.errors.append("No TTS engines available")
+        result.errors.append("No TTS engines available. See setup_instructions for how to configure them.")
+    elif not result.fish_speech_local_available and not result.fish_speech_cloud_available:
+        result.status = "partial"
+        result.warnings.append("Only Maya1 available. Fish Speech needed for voice cloning. See setup_instructions.")
+    elif not result.maya1_available:
+        result.status = "partial"
+        result.warnings.append("Only Fish Speech available. Maya1 needed for voice design. See setup_instructions.")
 
     return result
 

@@ -71,6 +71,8 @@ from .tools.tts import (
     generate_segment_audio,
     generate_voice_sample,
     generate_batch_audio,
+    download_maya1_models,
+    get_model_status,
 )
 from .tools.import_tools import (
     import_chapter_text,
@@ -449,6 +451,29 @@ def check_tts_availability() -> dict:
 def get_tts_info() -> dict:
     """List available TTS engines, emotion tags, voice presets, and description format."""
     return list_tts_info()
+
+
+@mcp.tool()
+def get_tts_model_status() -> dict:
+    """Get the download status of TTS models (Maya1 and SNAC).
+
+    Returns information about which models are downloaded and their cache locations.
+    Use this to check if models need to be downloaded before using Maya1.
+    """
+    return get_model_status()
+
+
+@mcp.tool()
+def download_tts_models(force: bool = False) -> dict:
+    """Download Maya1 TTS model weights from HuggingFace.
+
+    Downloads both the Maya1 language model and SNAC audio codec.
+    This may take a while depending on your internet connection (~10GB total).
+
+    Args:
+        force: If True, re-download even if models exist in cache.
+    """
+    return download_maya1_models(force)
 
 
 @mcp.tool()
