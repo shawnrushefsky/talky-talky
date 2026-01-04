@@ -79,24 +79,57 @@ class TTSCheckResult:
     fish_speech_cloud_available: bool = False
     torch_installed: bool = False
     cuda_available: bool = False
-    cuda_device: Optional[str] = None
+    mps_available: bool = False
+    device: Optional[str] = None
+    device_name: Optional[str] = None
     vram_gb: Optional[float] = None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+def _get_best_device() -> tuple[str, Optional[str], Optional[float]]:
+    """Detect the best available device for PyTorch.
+
+    Returns (device_string, device_name, vram_gb)
+    Priority: CUDA > MPS > CPU
+    """
+    try:
+        import torch
+    except ImportError:
+        return ("cpu", "CPU (PyTorch not installed)", None)
+
+    # Check CUDA first (NVIDIA GPUs)
+    if torch.cuda.is_available():
+        device_name = torch.cuda.get_device_name(0)
+        vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 2)
+        return ("cuda", device_name, vram_gb)
+
+    # Check MPS (Apple Silicon)
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return ("mps", "Apple Silicon (MPS)", None)
+
+    # Fall back to CPU
+    return ("cpu", "CPU", None)
 
 
 def check_tts() -> TTSCheckResult:
     """Check if TTS engines are available and properly configured."""
     result = TTSCheckResult(status="ok")
 
-    # Check PyTorch
+    # Check PyTorch and device
     try:
         import torch
         result.torch_installed = True
         result.cuda_available = torch.cuda.is_available()
-        if result.cuda_available:
-            result.cuda_device = torch.cuda.get_device_name(0)
-            result.vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 2)
+        result.mps_available = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+
+        device, device_name, vram_gb = _get_best_device()
+        result.device = device
+        result.device_name = device_name
+        result.vram_gb = vram_gb
+
+        if device == "cpu":
+            result.warnings.append("No GPU detected - Maya1 will run on CPU (slower)")
     except ImportError:
         result.warnings.append("PyTorch not installed - Maya1 unavailable")
 
@@ -187,26 +220,43 @@ def _load_maya1():
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     import snac
+    import sys
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if device == "cuda" else torch.float32
+    # Auto-detect best device
+    device, device_name, _ = _get_best_device()
 
-    print(f"Loading Maya1 model on {device}...", flush=True)
+    # Select appropriate dtype for device
+    if device == "cuda":
+        dtype = torch.bfloat16
+    elif device == "mps":
+        # MPS works best with float16 or float32
+        dtype = torch.float16
+    else:
+        dtype = torch.float32
+
+    print(f"Loading Maya1 model on {device} ({device_name})...", file=sys.stderr, flush=True)
 
     # Load Maya1 model
     _maya1_tokenizer = AutoTokenizer.from_pretrained("maya-research/maya1")
-    _maya1_model = AutoModelForCausalLM.from_pretrained(
-        "maya-research/maya1",
-        torch_dtype=dtype,
-        device_map="auto" if device == "cuda" else None,
-    )
-    if device == "cpu":
-        _maya1_model = _maya1_model.to(device)
+
+    if device == "cuda":
+        # Use device_map for CUDA
+        _maya1_model = AutoModelForCausalLM.from_pretrained(
+            "maya-research/maya1",
+            torch_dtype=dtype,
+            device_map="auto",
+        )
+    else:
+        # For MPS and CPU, load then move to device
+        _maya1_model = AutoModelForCausalLM.from_pretrained(
+            "maya-research/maya1",
+            torch_dtype=dtype,
+        ).to(device)
 
     # Load SNAC decoder
     _snac_model = snac.SNAC.from_pretrained("hubertsiuzdak/snac_24khz").to(device)
 
-    print("Maya1 model loaded successfully", flush=True)
+    print(f"Maya1 model loaded successfully on {device}", file=sys.stderr, flush=True)
     return _maya1_model, _maya1_tokenizer, _snac_model
 
 
