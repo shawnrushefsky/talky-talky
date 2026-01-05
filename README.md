@@ -2,7 +2,33 @@
 
 A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate speech with multiple TTS engines, convert audio formats, and process audio files—all through a standardized interface that works with any MCP-compatible client.
 
+## Quick Setup with AI Agents
+
+Copy and paste this prompt to your AI agent (Claude Code, Cursor, Windsurf, etc.) to have it automatically configure Talky Talky:
+
+```
+Install and configure the Talky Talky MCP server for text-to-speech capabilities.
+
+1. Clone the repo: git clone https://github.com/shawnrushefsky/talky-talky.git
+2. Add to my MCP configuration (.mcp.json or settings.json):
+   {
+     "mcpServers": {
+       "talky-talky": {
+         "command": "uv",
+         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "tts", "talky-talky"]
+       }
+     }
+   }
+3. Replace <path-to-talky-talky> with the actual clone path
+4. Verify by checking TTS availability after restart
+
+Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS engines.
+```
+
+---
+
 - [Talky Talky](#talky-talky)
+  - [Quick Setup with AI Agents](#quick-setup-with-ai-agents)
   - [Features](#features)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
