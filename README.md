@@ -5,10 +5,10 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
 ## Features
 
 - **Multiple TTS Engines**:
-  - **Maya1**: Voice design via natural language descriptions with 20+ emotion tags
-  - **Chatterbox**: High-quality voice cloning with emotion control
-  - **MiraTTS**: Fast voice cloning with 48kHz output (CUDA only)
-  - **XTTS-v2**: Multilingual voice cloning supporting 17 languages
+  - **Maya1**: Natural language voice design with 20+ emotion tags (Apache 2.0)
+  - **Chatterbox**: Zero-shot multilingual voice cloning with emotion control (23 languages)
+  - **MiraTTS**: Ultra-fast voice cloning at 100x realtime, 48kHz output (CUDA only)
+  - **XTTS-v2**: Cross-language voice cloning from just 6 seconds of audio (17 languages)
 - **Audio Utilities**: Format conversion, concatenation, normalization
 - **Cross-Platform**: Works on CUDA, MPS (Apple Silicon), and CPU
 
@@ -220,7 +220,7 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 
 ### Maya1 (Voice Design)
 
-Creates unique voices from natural language descriptions. No reference audio needed.
+A 3B parameter model that creates unique voices from natural language descriptions—like briefing an actor. No reference audio needed. Fully open-source under Apache 2.0.
 
 **Voice Description Example:**
 ```
@@ -228,7 +228,7 @@ Realistic female voice in the 20s age with american accent.
 Medium-high pitch, bright timbre, energetic pacing, enthusiastic tone.
 ```
 
-**Emotion Tags (inline):**
+**Emotion Tags (20+ supported):**
 ```
 <laugh> <chuckle> <sigh> <gasp> <whisper> <angry> <yell> <cry> <cough>
 ```
@@ -242,11 +242,13 @@ speak_maya1(
 )
 ```
 
-**Requirements:** CUDA GPU with 16GB+ VRAM (best), MPS, or CPU
+**Requirements:** CUDA GPU with 16GB+ VRAM (best), MPS, or CPU. Outputs 24kHz audio.
 
 ### Chatterbox (Voice Cloning)
 
-Clones voices from reference audio with emotion control.
+Zero-shot multilingual voice cloning with emotion/intensity control. Supports 23 languages including English, Spanish, French, German, Chinese, Japanese, Korean, Arabic, and more. The first open-source TTS with exaggeration control. Outperforms ElevenLabs in side-by-side evaluations.
+
+**Supported Languages:** Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swahili, Swedish, Turkish
 
 **Emotion Tags:**
 ```
@@ -254,7 +256,7 @@ Clones voices from reference audio with emotion control.
 ```
 
 **Parameters:**
-- `exaggeration`: 0.0-1.0+, controls expressiveness (default 0.5)
+- `exaggeration`: 0.0-1.0+, controls expressiveness/intensity (default 0.5)
 - `cfg_weight`: Controls pacing, lower = slower (default 0.5)
 
 **Example:**
@@ -267,11 +269,11 @@ speak_chatterbox(
 )
 ```
 
-**Requirements:** Works on CUDA, MPS, and CPU
+**Requirements:** Works on CUDA, MPS, and CPU. Outputs 24kHz audio.
 
 ### MiraTTS (Fast Voice Cloning)
 
-Fast voice cloning with high-quality 48kHz output.
+Ultra-fast voice cloning optimized for speed and efficiency. Over 100x realtime with batching, latency as low as 100ms. Outputs high-quality 48kHz audio (higher than most TTS models).
 
 **Example:**
 ```python
@@ -282,13 +284,13 @@ speak_mira(
 )
 ```
 
-**Requirements:** NVIDIA GPU with CUDA (6GB+ VRAM). Does NOT support MPS or CPU.
+**Requirements:** NVIDIA GPU with CUDA (6GB+ VRAM). Does NOT support MPS or CPU. Outputs 48kHz audio.
 
 ### XTTS-v2 (Multilingual)
 
-Multilingual voice cloning supporting 17 languages with cross-language cloning.
+Voice cloning from just a 6-second audio clip with cross-language capabilities. Clone a voice in one language and generate speech in another while preserving voice characteristics. Powers Coqui Studio and API.
 
-**Supported Languages:**
+**Supported Languages (17):**
 English, Spanish, French, German, Italian, Portuguese, Polish, Turkish, Russian, Dutch, Czech, Arabic, Chinese, Japanese, Hungarian, Korean, Hindi
 
 **Example:**
@@ -302,7 +304,7 @@ speak_xtts(
 )
 ```
 
-**Requirements:** Works on CUDA, MPS, and CPU. Model downloads automatically (~6GB).
+**Requirements:** Works on CUDA, MPS, and CPU. Model downloads automatically (~6GB). Outputs 24kHz audio.
 
 ## Usage Examples
 
