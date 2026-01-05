@@ -33,6 +33,7 @@ from .utils import check_ffmpeg, get_best_device
 # Import engines at module level (registered below after registry is defined)
 from .maya1 import Maya1Engine
 from .chatterbox import ChatterboxEngine
+from .mira import MiraEngine
 
 
 # ============================================================================
@@ -261,6 +262,7 @@ def get_tts_info() -> dict:
 
 register_engine(Maya1Engine)
 register_engine(ChatterboxEngine)
+register_engine(MiraEngine)
 
 
 # ============================================================================
@@ -288,4 +290,5 @@ __all__ = [
     # Engine classes (for direct use)
     "Maya1Engine",
     "ChatterboxEngine",
+    "MiraEngine",
 ]

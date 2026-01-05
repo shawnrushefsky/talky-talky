@@ -2,7 +2,7 @@
   "mcpServers": {
     "talky-talky": {
       "command": "uv",
-      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "talky-talky"]
+      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "--extra", "mira", "talky-talky"]
     }
   }
 }

@@ -4,6 +4,7 @@
 This MCP server provides TTS capabilities with pluggable engine support:
 - Maya1: Text-prompted voice design (describe the voice you want)
 - Chatterbox: Audio-prompted voice cloning (clone from reference audio)
+- MiraTTS: Fast voice cloning with high-quality 48kHz output
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -218,6 +219,37 @@ def speak_chatterbox(
         reference_audio_paths=reference_audio_paths,
         exaggeration=exaggeration,
         cfg_weight=cfg_weight,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_mira(
+    text: str,
+    output_path: str,
+    reference_audio_paths: list[str],
+) -> dict:
+    """Generate speech using MiraTTS (fast audio-prompted voice cloning).
+
+    Fast voice cloning with high-quality 48kHz output.
+    Over 100x realtime performance with only 6GB VRAM.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        reference_audio_paths: Paths to reference audio files for voice cloning.
+            At least one required. Clear speech samples work best.
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Note: MiraTTS does not support emotion tags but produces high-quality 48kHz audio.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="mira",
+        reference_audio_paths=reference_audio_paths,
     )
     return to_dict(result)
 

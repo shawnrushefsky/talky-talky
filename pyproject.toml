@@ -26,9 +26,20 @@ chatterbox = [
     "numpy<2.4",  # Chatterbox requires numpy < 2.4 for numba compatibility
     "onnx==1.16.0",  # Pin onnx for ml_dtypes compatibility
 ]
+# MiraTTS support (fast voice cloning with 48kHz output)
+# Uses transformers backend for cross-platform compatibility (CUDA, MPS, CPU)
+mira = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "ncodec @ git+https://github.com/ysharma3501/FastBiCodec.git",
+    "fastaudiosr @ git+https://github.com/ysharma3501/FlashSR.git",
+    "librosa>=0.10.0",
+    "einops>=0.6.0",
+    "onnxruntime>=1.15.0",
+]
 # All TTS engines
 tts = [
-    "talky-talky[maya1,chatterbox]",
+    "talky-talky[maya1,chatterbox,mira]",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -42,6 +53,9 @@ talky-talky = "talky_talky.server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["talky_talky"]
