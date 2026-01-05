@@ -16,9 +16,19 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
 
 ### Prerequisites
 
-- **Python** 3.11 or later
+- **Python 3.11 or later** (required due to TTS library dependencies)
 - **ffmpeg** (required for audio conversion)
 - **GPU** (recommended for TTS, but CPU also supported)
+
+> **Don't have Python 3.11+?** We recommend using [uv](https://docs.astral.sh/uv/) which automatically manages Python versions:
+> ```bash
+> # Install uv (if not already installed)
+> curl -LsSf https://astral.sh/uv/install.sh | sh
+>
+> # uv will automatically use Python 3.11+ when running talky-talky
+> uv run --extra tts talky-talky
+> ```
+> Alternatively, use [pyenv](https://github.com/pyenv/pyenv) to install Python 3.11+.
 
 ### Install from Source
 

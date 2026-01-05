@@ -17,7 +17,7 @@ Plus audio utilities for format conversion, concatenation, and normalization.
 
 ### Technology Stack
 
-- **Runtime**: Python 3.10+
+- **Runtime**: Python 3.11+ (required for TTS library compatibility)
 - **MCP SDK**: `mcp` with FastMCP for server implementation
 - **Audio Processing**: ffmpeg for format conversion and concatenation
 - **TTS Engines**:
@@ -25,6 +25,22 @@ Plus audio utilities for format conversion, concatenation, and normalization.
   - Chatterbox (local) - voice cloning from reference audio
   - MiraTTS (local, CUDA only) - fast voice cloning at 48kHz
   - XTTS-v2 (local) - multilingual voice cloning
+
+### Python Version Requirement
+
+This project requires Python 3.11+ due to numpy version conflicts between TTS libraries on Python 3.10. If a user has an older Python version, recommend:
+
+1. **Use `uv` (recommended)** - It automatically manages Python versions:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   uv run --extra tts talky-talky
+   ```
+
+2. **Use `pyenv`** to install Python 3.11+:
+   ```bash
+   pyenv install 3.11
+   pyenv local 3.11
+   ```
 
 ### Directory Structure
 
