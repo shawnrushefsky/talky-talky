@@ -305,7 +305,8 @@ def normalize_audio_levels(
     Returns:
         Dict with input_path, output_path, and duration_ms.
     """
-    return normalize_audio(input_path=input_path, output_path=output_path)
+    result = normalize_audio(input_path=input_path, output_path=output_path)
+    return to_dict(result)
 
 
 @mcp.tool()

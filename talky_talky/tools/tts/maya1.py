@@ -296,11 +296,26 @@ class Maya1Engine(TextPromptedEngine):
                         "other": ["sing"],
                     },
                     "examples": [
-                        {"text": "The treasure! <gasp> After all these years!", "note": "Gasp at moment of discovery"},
-                        {"text": "<whisper> Don't tell anyone about this...", "note": "Whisper at start for secretive tone"},
-                        {"text": "NO! <angry> I won't do it!", "note": "Angry emphasis after exclamation"},
-                        {"text": "<laugh> I can hardly believe it worked!", "note": "Laugh before joyful statement"},
-                        {"text": "And then he said... <chuckle> you won't believe this...", "note": "Chuckle mid-sentence"},
+                        {
+                            "text": "The treasure! <gasp> After all these years!",
+                            "note": "Gasp at moment of discovery",
+                        },
+                        {
+                            "text": "<whisper> Don't tell anyone about this...",
+                            "note": "Whisper at start for secretive tone",
+                        },
+                        {
+                            "text": "NO! <angry> I won't do it!",
+                            "note": "Angry emphasis after exclamation",
+                        },
+                        {
+                            "text": "<laugh> I can hardly believe it worked!",
+                            "note": "Laugh before joyful statement",
+                        },
+                        {
+                            "text": "And then he said... <chuckle> you won't believe this...",
+                            "note": "Chuckle mid-sentence",
+                        },
                     ],
                 },
                 voice_guidance={
@@ -309,11 +324,34 @@ class Maya1Engine(TextPromptedEngine):
                     "elements": {
                         "gender": ["male", "female"],
                         "age": ["child", "teenage", "20s", "30s", "40s", "50s", "60s", "elderly"],
-                        "accent": ["American", "British", "Australian", "Irish", "Scottish", "Southern US", "New York"],
+                        "accent": [
+                            "American",
+                            "British",
+                            "Australian",
+                            "Irish",
+                            "Scottish",
+                            "Southern US",
+                            "New York",
+                        ],
                         "pitch": ["low", "medium-low", "medium", "medium-high", "high"],
-                        "timbre": ["warm", "bright", "gravelly", "smooth", "husky", "nasal", "resonant"],
+                        "timbre": [
+                            "warm",
+                            "bright",
+                            "gravelly",
+                            "smooth",
+                            "husky",
+                            "nasal",
+                            "resonant",
+                        ],
                         "pacing": ["slow", "measured", "moderate", "energetic", "fast"],
-                        "character": ["authoritative", "gentle", "menacing", "cheerful", "wise", "nervous"],
+                        "character": [
+                            "authoritative",
+                            "gentle",
+                            "menacing",
+                            "cheerful",
+                            "wise",
+                            "nervous",
+                        ],
                     },
                     "examples": [
                         "Female narrator in her 30s with American accent, warm timbre, measured pacing",
@@ -439,39 +477,45 @@ pip install torch transformers snac
 
         output_path = Path(output_path)
 
-        model, tokenizer, snac_model = _load_models()
-        device = next(model.parameters()).device
+        # Validate inputs
+        if not text or not text.strip():
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=SAMPLE_RATE,
+                error="Text cannot be empty",
+            )
+
+        if not voice_description or not voice_description.strip():
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=SAMPLE_RATE,
+                error="Voice description cannot be empty",
+            )
+
+        try:
+            model, tokenizer, snac_model = _load_models()
+            device = next(model.parameters()).device
+        except Exception as e:
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=SAMPLE_RATE,
+                error=f"Failed to load Maya1 models: {e}",
+            )
 
         # Convert bracket-style tags to angle-style for Maya1
         text = convert_bracket_to_angle_tags(text)
 
-        # Check if text needs chunking
-        if len(text) <= MAX_CHUNK_CHARS:
-            audio_np = _generate_chunk(
-                text,
-                voice_description,
-                model,
-                tokenizer,
-                snac_model,
-                device,
-                temperature,
-                top_p,
-                repetition_penalty,
-            )
-            chunks_used = 1
-        else:
-            chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
-            print(
-                f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
-                file=sys.stderr,
-                flush=True,
-            )
-
-            audio_chunks = []
-            for i, chunk in enumerate(chunks):
-                print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
-                chunk_audio = _generate_chunk(
-                    chunk,
+        try:
+            # Check if text needs chunking
+            if len(text) <= MAX_CHUNK_CHARS:
+                audio_np = _generate_chunk(
+                    text,
                     voice_description,
                     model,
                     tokenizer,
@@ -481,38 +525,70 @@ pip install torch transformers snac
                     top_p,
                     repetition_penalty,
                 )
-                audio_chunks.append(chunk_audio)
+                chunks_used = 1
+            else:
+                chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
+                print(
+                    f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
-            # Concatenate with 100ms silence between chunks
-            silence = np.zeros(2400, dtype=np.float32)
-            result_parts = []
-            for i, chunk_audio in enumerate(audio_chunks):
-                result_parts.append(chunk_audio)
-                if i < len(audio_chunks) - 1:
-                    result_parts.append(silence)
+                audio_chunks = []
+                for i, chunk in enumerate(chunks):
+                    print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
+                    chunk_audio = _generate_chunk(
+                        chunk,
+                        voice_description,
+                        model,
+                        tokenizer,
+                        snac_model,
+                        device,
+                        temperature,
+                        top_p,
+                        repetition_penalty,
+                    )
+                    audio_chunks.append(chunk_audio)
 
-            audio_np = np.concatenate(result_parts)
-            chunks_used = len(chunks)
+                # Concatenate with 100ms silence between chunks
+                silence = np.zeros(2400, dtype=np.float32)
+                result_parts = []
+                for i, chunk_audio in enumerate(audio_chunks):
+                    result_parts.append(chunk_audio)
+                    if i < len(audio_chunks) - 1:
+                        result_parts.append(silence)
 
-        # Save
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(str(output_path), audio_np, SAMPLE_RATE)
+                audio_np = np.concatenate(result_parts)
+                chunks_used = len(chunks)
 
-        duration_ms = int(len(audio_np) / SAMPLE_RATE * 1000)
+            # Save
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            sf.write(str(output_path), audio_np, SAMPLE_RATE)
 
-        return TTSResult(
-            status="success",
-            output_path=str(output_path),
-            duration_ms=duration_ms,
-            sample_rate=SAMPLE_RATE,
-            chunks_used=chunks_used,
-            metadata={
-                "voice_description": voice_description,
-                "temperature": temperature,
-                "top_p": top_p,
-                "repetition_penalty": repetition_penalty,
-            },
-        )
+            duration_ms = int(len(audio_np) / SAMPLE_RATE * 1000)
+
+            return TTSResult(
+                status="success",
+                output_path=str(output_path),
+                duration_ms=duration_ms,
+                sample_rate=SAMPLE_RATE,
+                chunks_used=chunks_used,
+                metadata={
+                    "voice_description": voice_description,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "repetition_penalty": repetition_penalty,
+                },
+            )
+
+        except Exception as e:
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=SAMPLE_RATE,
+                error=f"Generation failed: {e}",
+            )
 
 
 # ============================================================================

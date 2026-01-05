@@ -359,8 +359,24 @@ uv pip install chatterbox-tts
 
         output_path = Path(output_path)
 
-        # Load model
-        model = _load_model()
+        # Validate inputs
+        if not text or not text.strip():
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=24000,
+                error="Text cannot be empty",
+            )
+
+        if not reference_audio_paths:
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=24000,
+                error="At least one reference audio path is required",
+            )
 
         # Validate reference audio paths
         for ref_path in reference_audio_paths:
@@ -369,9 +385,21 @@ uv pip install chatterbox-tts
                     status="error",
                     output_path=str(output_path),
                     duration_ms=0,
-                    sample_rate=model.sr,
+                    sample_rate=24000,
                     error=f"Reference audio file not found: {ref_path}",
                 )
+
+        try:
+            # Load model
+            model = _load_model()
+        except Exception as e:
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=24000,
+                error=f"Failed to load Chatterbox model: {e}",
+            )
 
         primary_ref_audio = reference_audio_paths[0]
 
@@ -380,57 +408,67 @@ uv pip install chatterbox-tts
 
         memory_gb, memory_type = get_available_memory_gb()
 
-        # Check if text needs chunking
-        if len(text) <= MAX_CHUNK_CHARS:
-            wav = model.generate(
-                text,
-                audio_prompt_path=primary_ref_audio,
-                exaggeration=exaggeration,
-                cfg_weight=cfg_weight,
-            )
-            chunks_used = 1
-        else:
-            chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
-            print(
-                f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
-                file=sys.stderr,
-                flush=True,
-            )
-
-            audio_chunks = []
-            for i, chunk in enumerate(chunks):
-                print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
-                chunk_wav = model.generate(
-                    chunk,
+        try:
+            # Check if text needs chunking
+            if len(text) <= MAX_CHUNK_CHARS:
+                wav = model.generate(
+                    text,
                     audio_prompt_path=primary_ref_audio,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight,
                 )
-                audio_chunks.append(chunk_wav)
+                chunks_used = 1
+            else:
+                chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
+                print(
+                    f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
-                if memory_type == "cuda":
-                    torch.cuda.empty_cache()
+                audio_chunks = []
+                for i, chunk in enumerate(chunks):
+                    print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
+                    chunk_wav = model.generate(
+                        chunk,
+                        audio_prompt_path=primary_ref_audio,
+                        exaggeration=exaggeration,
+                        cfg_weight=cfg_weight,
+                    )
+                    audio_chunks.append(chunk_wav)
 
-            wav = _concatenate_audio_tensors(audio_chunks, model.sr, silence_ms=100)
-            chunks_used = len(chunks)
+                    if memory_type == "cuda":
+                        torch.cuda.empty_cache()
 
-        # Save output
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        ta.save(str(output_path), wav, model.sr)
+                wav = _concatenate_audio_tensors(audio_chunks, model.sr, silence_ms=100)
+                chunks_used = len(chunks)
 
-        duration_ms = int(wav.shape[-1] / model.sr * 1000)
+            # Save output
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            ta.save(str(output_path), wav, model.sr)
 
-        return TTSResult(
-            status="success",
-            output_path=str(output_path),
-            duration_ms=duration_ms,
-            sample_rate=model.sr,
-            chunks_used=chunks_used,
-            metadata={
-                "exaggeration": exaggeration,
-                "cfg_weight": cfg_weight,
-                "reference_audio": primary_ref_audio,
-                "memory_gb": memory_gb,
-                "memory_type": memory_type,
-            },
-        )
+            duration_ms = int(wav.shape[-1] / model.sr * 1000)
+
+            return TTSResult(
+                status="success",
+                output_path=str(output_path),
+                duration_ms=duration_ms,
+                sample_rate=model.sr,
+                chunks_used=chunks_used,
+                metadata={
+                    "exaggeration": exaggeration,
+                    "cfg_weight": cfg_weight,
+                    "reference_audio": primary_ref_audio,
+                    "memory_gb": memory_gb,
+                    "memory_type": memory_type,
+                },
+            )
+
+        except Exception as e:
+            return TTSResult(
+                status="error",
+                output_path=str(output_path),
+                duration_ms=0,
+                sample_rate=24000,
+                error=f"Generation failed: {e}",
+            )

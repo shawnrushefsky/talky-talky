@@ -61,6 +61,15 @@ class ConcatenateResult:
     output_format: str
 
 
+@dataclass
+class NormalizeResult:
+    """Result of audio normalization."""
+
+    input_path: str
+    output_path: str
+    duration_ms: int
+
+
 # ============================================================================
 # Audio Utilities
 # ============================================================================
@@ -82,6 +91,16 @@ def get_audio_info(audio_path: str) -> AudioInfo:
             path=audio_path,
             exists=False,
             error="File not found",
+        )
+
+    # Check if ffprobe is available
+    if not check_ffmpeg():
+        return AudioInfo(
+            path=audio_path,
+            exists=True,
+            size_bytes=path.stat().st_size,
+            valid=False,
+            error="ffprobe not available - install ffmpeg to get audio metadata",
         )
 
     # Validate and get info
@@ -223,7 +242,7 @@ def concatenate_audio(
 def normalize_audio(
     input_path: str,
     output_path: Optional[str] = None,
-) -> dict:
+) -> NormalizeResult:
     """Normalize audio levels to broadcast standard (-16 LUFS).
 
     Args:
@@ -232,7 +251,7 @@ def normalize_audio(
             with '_normalized' suffix.
 
     Returns:
-        Dict with input_path, output_path, and duration_ms.
+        NormalizeResult with input_path, output_path, and duration_ms.
 
     Raises:
         RuntimeError: If ffmpeg is not installed.
@@ -257,11 +276,11 @@ def normalize_audio(
 
     duration = get_audio_duration(output_path)
 
-    return {
-        "input_path": input_path,
-        "output_path": output_path,
-        "duration_ms": duration,
-    }
+    return NormalizeResult(
+        input_path=input_path,
+        output_path=output_path,
+        duration_ms=duration,
+    )
 
 
 def is_ffmpeg_available() -> bool:

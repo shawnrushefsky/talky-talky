@@ -30,10 +30,10 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run ruff linter
-        run: ruff check talky_talky/
+        run: ruff check talky_talky/ tests/
 
       - name: Run ruff formatter check
-        run: ruff format --check talky_talky/
+        run: ruff format --check talky_talky/ tests/
 
   test:
     runs-on: ubuntu-latest

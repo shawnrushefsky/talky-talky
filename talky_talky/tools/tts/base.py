@@ -29,7 +29,9 @@ class PromptingGuide:
     overview: str  # Brief description of how to prompt this engine
     text_formatting: list[str]  # Tips for formatting input text
     emotion_tags: dict = field(default_factory=dict)  # Tag format, list, examples
-    voice_guidance: dict = field(default_factory=dict)  # How to specify voice (description or reference)
+    voice_guidance: dict = field(
+        default_factory=dict
+    )  # How to specify voice (description or reference)
     parameters: dict = field(default_factory=dict)  # Parameter descriptions and recommended values
     tips: list[str] = field(default_factory=list)  # General tips
     examples: list[dict] = field(default_factory=list)  # Full examples with text, params, and notes
