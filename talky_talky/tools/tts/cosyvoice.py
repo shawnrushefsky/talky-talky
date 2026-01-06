@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
-from .utils import get_best_device
+from .utils import get_best_device, redirect_stdout_to_stderr
 
 
 # ============================================================================
@@ -83,32 +83,35 @@ def _load_model(model_dir: Optional[str] = None):
     if _model is not None:
         return _model
 
-    try:
-        # CosyVoice uses a specific import path
-        from cosyvoice.cli.cosyvoice import AutoModel
-    except ImportError:
-        raise ImportError(
-            "CosyVoice not installed. Install with:\n"
-            "git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git\n"
-            "cd CosyVoice && pip install -r requirements.txt"
-        )
-
     device, device_name, _ = get_best_device()
     print(f"Loading CosyVoice3 on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-    # Use provided model_dir or download from HuggingFace
-    if model_dir:
-        _model = AutoModel(model_dir=model_dir)
-    else:
-        # Default: download to pretrained_models directory
-        from huggingface_hub import snapshot_download
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        try:
+            # CosyVoice uses a specific import path
+            from cosyvoice.cli.cosyvoice import AutoModel
+        except ImportError:
+            raise ImportError(
+                "CosyVoice not installed. Install with:\n"
+                "git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git\n"
+                "cd CosyVoice && pip install -r requirements.txt"
+            )
 
-        local_dir = Path.home() / ".cache" / "cosyvoice" / "Fun-CosyVoice3-0.5B"
-        if not local_dir.exists():
-            print(f"Downloading CosyVoice3 model to {local_dir}...", file=sys.stderr, flush=True)
-            snapshot_download(MODEL_ID, local_dir=str(local_dir))
+        # Use provided model_dir or download from HuggingFace
+        if model_dir:
+            _model = AutoModel(model_dir=model_dir)
+        else:
+            # Default: download to pretrained_models directory
+            from huggingface_hub import snapshot_download
 
-        _model = AutoModel(model_dir=str(local_dir))
+            local_dir = Path.home() / ".cache" / "cosyvoice" / "Fun-CosyVoice3-0.5B"
+            if not local_dir.exists():
+                print(f"Downloading CosyVoice3 model to {local_dir}...", file=sys.stderr, flush=True)
+                snapshot_download(MODEL_ID, local_dir=str(local_dir))
+
+            _model = AutoModel(model_dir=str(local_dir))
 
     print("CosyVoice3 loaded successfully", file=sys.stderr, flush=True)
     return _model

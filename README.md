@@ -322,6 +322,9 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 | `join_audio_files` | Concatenate multiple audio files |
 | `normalize_audio_levels` | Normalize to broadcast standard (-16 LUFS) |
 | `check_ffmpeg_available` | Check ffmpeg installation |
+| `play_audio` | Play audio file with system's default player |
+| `set_output_directory` | Set default directory for saving audio files |
+| `get_output_directory` | Get current default output directory |
 
 ## TTS Engine Guide
 

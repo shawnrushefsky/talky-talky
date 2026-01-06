@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from .base import TTSEngine, TTSResult, EngineInfo, PromptingGuide
-from .utils import get_best_device
+from .utils import get_best_device, redirect_stdout_to_stderr
 
 
 # ============================================================================
@@ -39,8 +39,6 @@ def _load_model():
     if _model is not None:
         return _model
 
-    from soprano import SopranoTTS
-
     device, device_name, _ = get_best_device()
 
     if device != "cuda":
@@ -50,7 +48,14 @@ def _load_model():
         )
 
     print("Loading Soprano TTS model on CUDA...", file=sys.stderr, flush=True)
-    _model = SopranoTTS()
+
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        from soprano import SopranoTTS
+
+        _model = SopranoTTS()
+
     print("Soprano TTS model loaded successfully", file=sys.stderr, flush=True)
 
     return _model

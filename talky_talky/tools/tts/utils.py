@@ -5,12 +5,41 @@ This module contains utilities used by multiple TTS engines:
 - Text chunking
 - Device detection
 - Memory utilities
+- stdout redirection for MCP compatibility
 """
 
 import re
 import shutil
 import sys
+from contextlib import contextmanager
 from typing import Optional
+
+
+# ============================================================================
+# stdout Redirection (MCP Protocol Compatibility)
+# ============================================================================
+
+
+@contextmanager
+def redirect_stdout_to_stderr():
+    """Redirect stdout to stderr to prevent library output from breaking MCP JSON protocol.
+
+    Many TTS libraries print progress messages, loading status, etc. to stdout.
+    Since MCP uses stdout for JSON-RPC communication, this output breaks the protocol.
+    Use this context manager around library imports and model operations.
+
+    Usage:
+        with redirect_stdout_to_stderr():
+            from some_tts_library import Model
+            model = Model.from_pretrained("model-id")
+            result = model.generate(text)
+    """
+    old_stdout = sys.stdout
+    sys.stdout = sys.stderr
+    try:
+        yield
+    finally:
+        sys.stdout = old_stdout
 
 
 # ============================================================================

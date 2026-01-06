@@ -12,6 +12,7 @@ from .utils import (
     convert_bracket_to_angle_tags,
     split_text_into_chunks,
     get_best_device,
+    redirect_stdout_to_stderr,
 )
 
 
@@ -87,37 +88,40 @@ def _load_models():
     if _model is not None:
         return _model, _tokenizer, _snac_model
 
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    import snac
-
     device, device_name, _ = get_best_device()
-
-    # Select appropriate dtype for device
-    if device == "cuda":
-        dtype = torch.bfloat16
-    elif device == "mps":
-        dtype = torch.float16
-    else:
-        dtype = torch.float32
 
     print(f"Loading Maya1 model on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-    _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import snac
 
-    if device == "cuda":
-        _model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            torch_dtype=dtype,
-            device_map="auto",
-        )
-    else:
-        _model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            torch_dtype=dtype,
-        ).to(device)
+        # Select appropriate dtype for device
+        if device == "cuda":
+            dtype = torch.bfloat16
+        elif device == "mps":
+            dtype = torch.float16
+        else:
+            dtype = torch.float32
 
-    _snac_model = snac.SNAC.from_pretrained(SNAC_MODEL_ID).to(device)
+        _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+
+        if device == "cuda":
+            _model = AutoModelForCausalLM.from_pretrained(
+                MODEL_ID,
+                torch_dtype=dtype,
+                device_map="auto",
+            )
+        else:
+            _model = AutoModelForCausalLM.from_pretrained(
+                MODEL_ID,
+                torch_dtype=dtype,
+            ).to(device)
+
+        _snac_model = snac.SNAC.from_pretrained(SNAC_MODEL_ID).to(device)
 
     print(f"Maya1 model loaded successfully on {device}", file=sys.stderr, flush=True)
     return _model, _tokenizer, _snac_model

@@ -13,6 +13,7 @@ from .utils import (
     split_text_into_chunks,
     get_best_device,
     get_available_memory_gb,
+    redirect_stdout_to_stderr,
 )
 
 
@@ -66,44 +67,47 @@ def _load_model():
     if _model is not None:
         return _model
 
-    # Workaround for PyTorch 2.6+ weights_only security change
-    # TTS library uses pickle-based weights - temporarily patch torch.load
-    import torch
-    from functools import wraps
+    device, device_name, _ = get_best_device()
+    print(f"Loading XTTS-v2 model on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-    _original_torch_load = torch.load
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        # Workaround for PyTorch 2.6+ weights_only security change
+        # TTS library uses pickle-based weights - temporarily patch torch.load
+        import torch
+        from functools import wraps
 
-    @wraps(_original_torch_load)
-    def _patched_load(*args, **kwargs):
-        # Force weights_only=False for TTS model loading
-        kwargs.setdefault("weights_only", False)
-        return _original_torch_load(*args, **kwargs)
+        _original_torch_load = torch.load
 
-    torch.load = _patched_load
+        @wraps(_original_torch_load)
+        def _patched_load(*args, **kwargs):
+            # Force weights_only=False for TTS model loading
+            kwargs.setdefault("weights_only", False)
+            return _original_torch_load(*args, **kwargs)
 
-    try:
-        from TTS.api import TTS
+        torch.load = _patched_load
 
-        device, device_name, _ = get_best_device()
-        print(f"Loading XTTS-v2 model on {device} ({device_name})...", file=sys.stderr, flush=True)
-
-        # Initialize TTS with GPU flag
-        # TTS uses "gpu=True" for CUDA, but we need to handle MPS separately
-        use_gpu = device == "cuda"
-        _model = TTS(MODEL_NAME, gpu=use_gpu)
-    finally:
-        # Restore original torch.load
-        torch.load = _original_torch_load
-
-    # For MPS, manually move the model to the device after loading
-    if device == "mps":
         try:
-            if hasattr(_model, "synthesizer") and _model.synthesizer is not None:
-                if hasattr(_model.synthesizer, "tts_model"):
-                    _model.synthesizer.tts_model = _model.synthesizer.tts_model.to(device)
-                    print("Moved XTTS-v2 model to MPS device", file=sys.stderr, flush=True)
-        except Exception as e:
-            print(f"Warning: Could not move model to MPS: {e}", file=sys.stderr, flush=True)
+            from TTS.api import TTS
+
+            # Initialize TTS with GPU flag
+            # TTS uses "gpu=True" for CUDA, but we need to handle MPS separately
+            use_gpu = device == "cuda"
+            _model = TTS(MODEL_NAME, gpu=use_gpu)
+        finally:
+            # Restore original torch.load
+            torch.load = _original_torch_load
+
+        # For MPS, manually move the model to the device after loading
+        if device == "mps":
+            try:
+                if hasattr(_model, "synthesizer") and _model.synthesizer is not None:
+                    if hasattr(_model.synthesizer, "tts_model"):
+                        _model.synthesizer.tts_model = _model.synthesizer.tts_model.to(device)
+                        print("Moved XTTS-v2 model to MPS device", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"Warning: Could not move model to MPS: {e}", file=sys.stderr, flush=True)
 
     print("XTTS-v2 model loaded successfully", file=sys.stderr, flush=True)
     return _model

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .base import VoiceSelectionEngine, TTSResult, EngineInfo, PromptingGuide
+from .utils import redirect_stdout_to_stderr
 
 
 # ============================================================================
@@ -121,10 +122,15 @@ def _get_pipeline(lang_code: str):
     if lang_code in _pipeline_cache:
         return _pipeline_cache[lang_code]
 
-    from kokoro import KPipeline
-
     print(f"Loading Kokoro pipeline for language '{lang_code}'...", file=sys.stderr, flush=True)
-    pipeline = KPipeline(lang_code=lang_code)
+
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        from kokoro import KPipeline
+
+        pipeline = KPipeline(lang_code=lang_code)
+
     _pipeline_cache[lang_code] = pipeline
     print(f"Kokoro pipeline loaded for '{lang_code}'", file=sys.stderr, flush=True)
 

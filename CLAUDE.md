@@ -408,6 +408,9 @@ print(result)
 - `join_audio_files` - Concatenate multiple audio files
 - `normalize_audio_levels` - Normalize to broadcast standard
 - `check_ffmpeg_available` - Check ffmpeg installation
+- `play_audio` - Play audio file with system's default player
+- `set_output_directory` - Set default directory for saving audio files
+- `get_output_directory` - Get current default output directory
 
 ## TTS Engines
 
@@ -743,6 +746,27 @@ On Linux with CUDA GPU, you can use `--extra tts` to include all engines:
 - **This project uses `uv`** for package management and running Python
 - Always use `uv run` to execute Python commands (e.g., `uv run python`, `uv run pytest`)
 - Install dependencies with `uv pip install` or `uv sync`
+
+### MCP Protocol Compatibility
+
+**Important:** MCP servers communicate via JSON-RPC over stdout. Many TTS libraries print progress messages, loading status, etc. to stdout, which breaks the protocol.
+
+All TTS engines must use the `redirect_stdout_to_stderr()` context manager from `utils.py` when:
+- Importing TTS libraries
+- Loading models
+- Running generation
+
+```python
+from .utils import redirect_stdout_to_stderr
+
+def _load_model():
+    with redirect_stdout_to_stderr():
+        from some_tts_library import Model
+        model = Model.from_pretrained("model-id")
+    return model
+```
+
+This redirects any library output to stderr where it won't interfere with MCP communication.
 
 ## Debugging
 

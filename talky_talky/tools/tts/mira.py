@@ -13,6 +13,7 @@ from .utils import (
     split_text_into_chunks,
     get_best_device,
     get_available_memory_gb,
+    redirect_stdout_to_stderr,
 )
 
 
@@ -47,42 +48,45 @@ class MiraTTSTransformers:
     """
 
     def __init__(self, model_id: str = MODEL_ID):
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        from ncodec.codec import TTSCodec
-
         device, device_name, _ = get_best_device()
         self.device = device
 
         print(f"Loading MiraTTS model on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-        # Load model with appropriate dtype
-        if device == "cuda":
-            dtype = torch.bfloat16
-        elif device == "mps":
-            dtype = torch.float16  # MPS works better with float16
-        else:
-            dtype = torch.float32
+        # Redirect stdout to stderr during import and model loading
+        # to prevent library output from breaking MCP JSON protocol
+        with redirect_stdout_to_stderr():
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from ncodec.codec import TTSCodec
 
-        # Load model - device_map only works for CUDA
-        if device == "cuda":
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype=dtype,
-                device_map="auto",
-                trust_remote_code=True,
-            )
-        else:
-            # For MPS and CPU, load without device_map then move
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype=dtype,
-                trust_remote_code=True,
-            )
-            self.model = self.model.to(device)
+            # Load model with appropriate dtype
+            if device == "cuda":
+                dtype = torch.bfloat16
+            elif device == "mps":
+                dtype = torch.float16  # MPS works better with float16
+            else:
+                dtype = torch.float32
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        self.codec = TTSCodec()
+            # Load model - device_map only works for CUDA
+            if device == "cuda":
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    torch_dtype=dtype,
+                    device_map="auto",
+                    trust_remote_code=True,
+                )
+            else:
+                # For MPS and CPU, load without device_map then move
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    torch_dtype=dtype,
+                    trust_remote_code=True,
+                )
+                self.model = self.model.to(device)
+
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+            self.codec = TTSCodec()
 
         # Generation config matching original MiraTTS
         self.gen_config = {

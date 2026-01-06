@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base import TextPromptedEngine, TTSResult, EngineInfo, PromptingGuide
-from .utils import split_text_into_chunks, get_best_device
+from .utils import split_text_into_chunks, get_best_device, redirect_stdout_to_stderr
 
 
 # ============================================================================
@@ -59,18 +59,21 @@ def _load_realtime_model():
     if _realtime_model is not None:
         return _realtime_model
 
-    try:
-        from vibevoice import VibeVoiceRealtime
-    except ImportError:
-        raise ImportError(
-            "VibeVoice not installed. Install with: pip install vibevoice\n"
-            "Or clone: git clone https://github.com/microsoft/VibeVoice.git && pip install -e ."
-        )
-
     device, device_name, _ = get_best_device()
     print(f"Loading VibeVoice Realtime on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-    _realtime_model = VibeVoiceRealtime(model_path=MODEL_ID_REALTIME, device=device)
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        try:
+            from vibevoice import VibeVoiceRealtime
+        except ImportError:
+            raise ImportError(
+                "VibeVoice not installed. Install with: pip install vibevoice\n"
+                "Or clone: git clone https://github.com/microsoft/VibeVoice.git && pip install -e ."
+            )
+
+        _realtime_model = VibeVoiceRealtime(model_path=MODEL_ID_REALTIME, device=device)
 
     print("VibeVoice Realtime loaded successfully", file=sys.stderr, flush=True)
     return _realtime_model
@@ -83,18 +86,21 @@ def _load_longform_model():
     if _longform_model is not None:
         return _longform_model
 
-    try:
-        from vibevoice import VibeVoice
-    except ImportError:
-        raise ImportError(
-            "VibeVoice not installed. Install with: pip install vibevoice\n"
-            "Or clone: git clone https://github.com/microsoft/VibeVoice.git && pip install -e ."
-        )
-
     device, device_name, _ = get_best_device()
     print(f"Loading VibeVoice 1.5B on {device} ({device_name})...", file=sys.stderr, flush=True)
 
-    _longform_model = VibeVoice(model_path=MODEL_ID_LONGFORM, device=device)
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        try:
+            from vibevoice import VibeVoice
+        except ImportError:
+            raise ImportError(
+                "VibeVoice not installed. Install with: pip install vibevoice\n"
+                "Or clone: git clone https://github.com/microsoft/VibeVoice.git && pip install -e ."
+            )
+
+        _longform_model = VibeVoice(model_path=MODEL_ID_LONGFORM, device=device)
 
     print("VibeVoice 1.5B loaded successfully", file=sys.stderr, flush=True)
     return _longform_model

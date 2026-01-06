@@ -14,6 +14,7 @@ from .utils import (
     split_text_into_chunks,
     get_best_device,
     get_available_memory_gb,
+    redirect_stdout_to_stderr,
 )
 
 
@@ -56,9 +57,12 @@ def _load_model():
     device, device_name, _ = get_best_device()
     print(f"Loading Chatterbox TTS model on {device}...", file=sys.stderr, flush=True)
 
-    from chatterbox.tts import ChatterboxTTS
+    # Redirect stdout to stderr during import and model loading
+    # to prevent library output from breaking MCP JSON protocol
+    with redirect_stdout_to_stderr():
+        from chatterbox.tts import ChatterboxTTS
 
-    _model = ChatterboxTTS.from_pretrained(device=device)
+        _model = ChatterboxTTS.from_pretrained(device=device)
 
     print("Chatterbox TTS model loaded successfully", file=sys.stderr, flush=True)
     return _model
@@ -411,39 +415,42 @@ uv pip install chatterbox-tts
         memory_gb, memory_type = get_available_memory_gb()
 
         try:
-            # Check if text needs chunking
-            if len(text) <= MAX_CHUNK_CHARS:
-                wav = model.generate(
-                    text,
-                    audio_prompt_path=primary_ref_audio,
-                    exaggeration=exaggeration,
-                    cfg_weight=cfg_weight,
-                )
-                chunks_used = 1
-            else:
-                chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
-                print(
-                    f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-                audio_chunks = []
-                for i, chunk in enumerate(chunks):
-                    print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
-                    chunk_wav = model.generate(
-                        chunk,
+            # Redirect stdout to stderr during generation
+            # to prevent library output from breaking MCP JSON protocol
+            with redirect_stdout_to_stderr():
+                # Check if text needs chunking
+                if len(text) <= MAX_CHUNK_CHARS:
+                    wav = model.generate(
+                        text,
                         audio_prompt_path=primary_ref_audio,
                         exaggeration=exaggeration,
                         cfg_weight=cfg_weight,
                     )
-                    audio_chunks.append(chunk_wav)
+                    chunks_used = 1
+                else:
+                    chunks = split_text_into_chunks(text, MAX_CHUNK_CHARS)
+                    print(
+                        f"Splitting into {len(chunks)} chunks ({len(text)} chars)",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
-                    if memory_type == "cuda":
-                        torch.cuda.empty_cache()
+                    audio_chunks = []
+                    for i, chunk in enumerate(chunks):
+                        print(f"  Chunk {i + 1}/{len(chunks)}...", file=sys.stderr, flush=True)
+                        chunk_wav = model.generate(
+                            chunk,
+                            audio_prompt_path=primary_ref_audio,
+                            exaggeration=exaggeration,
+                            cfg_weight=cfg_weight,
+                        )
+                        audio_chunks.append(chunk_wav)
 
-                wav = _concatenate_audio_tensors(audio_chunks, model.sr, silence_ms=100)
-                chunks_used = len(chunks)
+                        if memory_type == "cuda":
+                            torch.cuda.empty_cache()
+
+                    wav = _concatenate_audio_tensors(audio_chunks, model.sr, silence_ms=100)
+                    chunks_used = len(chunks)
 
             # Save output
             output_path.parent.mkdir(parents=True, exist_ok=True)

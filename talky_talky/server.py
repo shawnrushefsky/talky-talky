@@ -16,7 +16,11 @@ This MCP server provides TTS capabilities with pluggable engine support:
 Plus audio utilities for format conversion and concatenation.
 """
 
+import json
+import subprocess
+import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -49,6 +53,50 @@ VERSION = "0.2.0"
 
 # Initialize MCP server
 mcp = FastMCP("talky-talky")
+
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+CONFIG_DIR = Path.home() / ".config" / "talky-talky"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "talky-talky"
+
+
+def _load_config() -> dict:
+    """Load configuration from file."""
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def _save_config(config: dict) -> None:
+    """Save configuration to file."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+
+
+def get_output_dir() -> Path:
+    """Get the configured output directory, creating it if needed."""
+    config = _load_config()
+    output_dir = Path(config.get("output_directory", str(DEFAULT_OUTPUT_DIR)))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
+
+
+def resolve_output_path(output_path: str) -> str:
+    """Resolve output path, using default directory if path is just a filename."""
+    path = Path(output_path)
+    # If it's just a filename (no directory components), use the configured output dir
+    if path.parent == Path(".") or str(path.parent) == "":
+        return str(get_output_dir() / path.name)
+    # Otherwise, ensure the parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 # ============================================================================
@@ -167,7 +215,9 @@ def speak_maya1(
 
     Args:
         text: The text to synthesize. Can include emotion tags.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         voice_description: Natural language description of the voice.
             Example: "Gruff male pirate, 50s, British accent, slow pacing"
         temperature: Sampling temperature (0.1-1.0, default 0.4). Lower = more stable.
@@ -181,7 +231,7 @@ def speak_maya1(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="maya1",
         voice_description=voice_description,
         temperature=temperature,
@@ -206,7 +256,9 @@ def speak_chatterbox(
 
     Args:
         text: The text to synthesize. Can include emotion tags.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. 10+ seconds of clear speech recommended.
         exaggeration: Controls speech expressiveness (0.0-1.0+, default 0.5).
@@ -221,7 +273,7 @@ def speak_chatterbox(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="chatterbox",
         reference_audio_paths=reference_audio_paths,
         exaggeration=exaggeration,
@@ -243,7 +295,9 @@ def speak_mira(
 
     Args:
         text: The text to synthesize.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. Clear speech samples work best.
 
@@ -254,7 +308,7 @@ def speak_mira(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="mira",
         reference_audio_paths=reference_audio_paths,
     )
@@ -275,7 +329,9 @@ def speak_xtts(
 
     Args:
         text: The text to synthesize.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. 6+ seconds of clear speech recommended.
         language: Target language code (default: "en").
@@ -289,7 +345,7 @@ def speak_xtts(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="xtts",
         reference_audio_paths=reference_audio_paths,
         language=language,
@@ -311,7 +367,9 @@ def speak_kokoro(
 
     Args:
         text: The text to synthesize.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         voice: Voice ID to use (default: "af_heart").
             Format: [lang][gender]_[name]
             Examples: af_heart (American Female Heart), bm_george (British Male George)
@@ -330,7 +388,7 @@ def speak_kokoro(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="kokoro",
         voice=voice,
         speed=speed,
@@ -353,7 +411,9 @@ def speak_soprano(
 
     Args:
         text: The text to synthesize.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         temperature: Sampling temperature (default: 0.3). Lower = more consistent.
         top_p: Nucleus sampling parameter (default: 0.95).
         repetition_penalty: Penalty for repetition (default: 1.2).
@@ -366,7 +426,7 @@ def speak_soprano(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="soprano",
         temperature=temperature,
         top_p=top_p,
@@ -389,7 +449,9 @@ def speak_chatterbox_turbo(
 
     Args:
         text: The text to synthesize. Can include emotion tags.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. 10+ seconds of clear speech recommended.
 
@@ -403,7 +465,7 @@ def speak_chatterbox_turbo(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="chatterbox_turbo",
         reference_audio_paths=reference_audio_paths,
     )
@@ -423,7 +485,9 @@ def speak_vibevoice_realtime(
 
     Args:
         text: The text to synthesize.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         speaker_name: Name of the speaker voice to use (default: "Carter").
             Available speakers: Carter, Emily, Nova, Michael, Sarah
 
@@ -434,7 +498,7 @@ def speak_vibevoice_realtime(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="vibevoice_realtime",
         voice_description=speaker_name,
     )
@@ -455,7 +519,9 @@ def speak_vibevoice_longform(
 
     Args:
         text: The text to synthesize. Can include speaker labels for multi-speaker.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         speaker_name: Primary speaker name for single-speaker generation (default: "Carter").
         speakers: List of speaker names for multi-speaker generation (max 4).
             If provided, overrides speaker_name.
@@ -467,7 +533,7 @@ def speak_vibevoice_longform(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="vibevoice_longform",
         voice_description=speaker_name,
         speakers=speakers,
@@ -491,7 +557,9 @@ def speak_cosyvoice(
 
     Args:
         text: The text to synthesize. Can include [breath] tags for breathing sounds.
-        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. 5-10 seconds of clear speech recommended.
         prompt_text: Transcript of reference audio (improves quality).
@@ -511,7 +579,7 @@ def speak_cosyvoice(
     """
     result = generate(
         text=text,
-        output_path=output_path,
+        output_path=resolve_output_path(output_path),
         engine="cosyvoice3",
         reference_audio_paths=reference_audio_paths,
         prompt_text=prompt_text,
@@ -609,6 +677,58 @@ def normalize_audio_levels(
 
 
 @mcp.tool()
+def set_output_directory(directory: str) -> dict:
+    """Set the default directory where audio files will be saved.
+
+    When generating audio, if you provide just a filename (e.g., "speech.wav")
+    instead of a full path, it will be saved to this directory.
+
+    Args:
+        directory: Path to the directory for saving audio files.
+            Use "default" to reset to ~/Documents/talky-talky.
+
+    Returns:
+        Dict with status, the configured directory path, and whether it was created.
+    """
+    if directory.lower() == "default":
+        output_dir = DEFAULT_OUTPUT_DIR
+    else:
+        output_dir = Path(directory).expanduser().resolve()
+
+    # Create the directory if it doesn't exist
+    created = not output_dir.exists()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save to config
+    config = _load_config()
+    config["output_directory"] = str(output_dir)
+    _save_config(config)
+
+    return {
+        "status": "success",
+        "output_directory": str(output_dir),
+        "created": created,
+        "message": f"Audio files will be saved to: {output_dir}",
+    }
+
+
+@mcp.tool()
+def get_output_directory() -> dict:
+    """Get the current default directory where audio files are saved.
+
+    Returns:
+        Dict with the current output directory path and whether it exists.
+    """
+    output_dir = get_output_dir()
+    return {
+        "output_directory": str(output_dir),
+        "exists": output_dir.exists(),
+        "default": str(DEFAULT_OUTPUT_DIR),
+        "is_default": str(output_dir) == str(DEFAULT_OUTPUT_DIR),
+    }
+
+
+@mcp.tool()
 def check_ffmpeg_available() -> dict:
     """Check if ffmpeg is installed and available.
 
@@ -624,6 +744,60 @@ def check_ffmpeg_available() -> dict:
         if available
         else "ffmpeg not found. Install with: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)",
     }
+
+
+@mcp.tool()
+def play_audio(audio_path: str) -> dict:
+    """Play an audio file using the system's default audio player.
+
+    Opens the audio file with the platform's default application for audio playback.
+    This is useful for previewing generated TTS audio.
+
+    Args:
+        audio_path: Path to the audio file to play.
+
+    Returns:
+        Dict with status and message indicating success or failure.
+
+    Platform behavior:
+    - macOS: Uses 'open' command (opens in default app like QuickTime/Music)
+    - Linux: Uses 'xdg-open' command (opens in default audio player)
+    - Windows: Uses 'start' command (opens in default app like Windows Media Player)
+    """
+    audio_path = Path(audio_path)
+
+    if not audio_path.exists():
+        return {
+            "status": "error",
+            "message": f"Audio file not found: {audio_path}",
+        }
+
+    try:
+        if sys.platform == "darwin":
+            # macOS
+            subprocess.Popen(["open", str(audio_path)])
+        elif sys.platform == "win32":
+            # Windows
+            subprocess.Popen(["start", "", str(audio_path)], shell=True)
+        else:
+            # Linux and other Unix-like systems
+            subprocess.Popen(["xdg-open", str(audio_path)])
+
+        return {
+            "status": "success",
+            "message": f"Opened {audio_path.name} in default audio player",
+            "path": str(audio_path),
+        }
+    except FileNotFoundError as e:
+        return {
+            "status": "error",
+            "message": f"Could not find system command to open audio: {e}",
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to play audio: {e}",
+        }
 
 
 # ============================================================================
