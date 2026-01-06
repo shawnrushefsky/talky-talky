@@ -108,7 +108,9 @@ def _load_model(model_dir: Optional[str] = None):
 
             local_dir = Path.home() / ".cache" / "cosyvoice" / "Fun-CosyVoice3-0.5B"
             if not local_dir.exists():
-                print(f"Downloading CosyVoice3 model to {local_dir}...", file=sys.stderr, flush=True)
+                print(
+                    f"Downloading CosyVoice3 model to {local_dir}...", file=sys.stderr, flush=True
+                )
                 snapshot_download(MODEL_ID, local_dir=str(local_dir))
 
             _model = AutoModel(model_dir=str(local_dir))
