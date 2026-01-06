@@ -10,7 +10,20 @@ Copy and paste this prompt to your AI agent (Claude Code, Cursor, Windsurf, etc.
 Install and configure the Talky Talky MCP server for text-to-speech capabilities.
 
 1. Clone the repo: git clone https://github.com/shawnrushefsky/talky-talky.git
-2. Add to my MCP configuration (.mcp.json or settings.json):
+2. Find the full path to uv: which uv (e.g., /Users/username/.local/bin/uv)
+3. Add to my MCP configuration:
+
+   For Claude Desktop (GUI app - MUST use full path to uv):
+   {
+     "mcpServers": {
+       "talky-talky": {
+         "command": "/full/path/to/uv",
+         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "maya1", "--extra", "chatterbox", "--extra", "xtts", "--extra", "kokoro", "--extra", "vibevoice", "talky-talky"]
+       }
+     }
+   }
+
+   For CLI tools (Claude Code, .mcp.json):
    {
      "mcpServers": {
        "talky-talky": {
@@ -19,8 +32,14 @@ Install and configure the Talky Talky MCP server for text-to-speech capabilities
        }
      }
    }
-3. Replace <path-to-talky-talky> with the actual clone path
-4. Verify by checking TTS availability after restart
+
+4. Replace paths with actual values
+5. Restart the application and verify by checking TTS availability
+
+IMPORTANT for macOS:
+- GUI apps (Claude Desktop) don't inherit shell PATH - use full path to uv
+- Use individual extras (maya1, chatterbox, xtts, kokoro, vibevoice) instead of "tts" to avoid
+  CUDA-only dependencies (mira, soprano) that fail on macOS ARM64
 
 Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS engines.
 ```
@@ -231,12 +250,20 @@ Or with uv (no install required):
 {
   "mcpServers": {
     "talky-talky": {
-      "command": "uv",
+      "command": "/full/path/to/uv",
       "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
     }
   }
 }
 ```
+
+> **Important for macOS users:**
+> - GUI apps like Claude Desktop don't inherit your shell's PATH. Use the **full path to uv** (find it with `which uv`, e.g., `/Users/username/.local/bin/uv`)
+> - On macOS ARM64 (Apple Silicon), use individual extras instead of `--extra tts` to avoid CUDA-only dependencies that don't have macOS wheels:
+>   ```json
+>   "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "maya1", "--extra", "chatterbox", "--extra", "xtts", "--extra", "kokoro", "--extra", "vibevoice", "talky-talky"]
+>   ```
+> - This includes: Maya1, Chatterbox (+ Turbo), XTTS, Kokoro, and VibeVoice which all support MPS (Apple Silicon)
 
 ### Claude Code (CLI)
 

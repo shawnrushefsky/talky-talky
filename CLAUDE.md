@@ -671,6 +671,73 @@ uv run talky-talky
 uv run python -m talky_talky.server
 ```
 
+## Configuring MCP Clients
+
+### Claude Desktop (macOS)
+
+**Important:** GUI applications on macOS don't inherit the shell PATH, so you must use the full path to `uv`.
+
+1. Find the full path to uv:
+   ```bash
+   which uv
+   # Example output: /Users/username/.local/bin/uv
+   ```
+
+2. On macOS ARM64 (Apple Silicon), use individual extras instead of `--extra tts` to avoid CUDA-only dependencies (`mira`, `soprano`) that don't have macOS wheels:
+
+3. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "talky-talky": {
+         "command": "/Users/username/.local/bin/uv",
+         "args": [
+           "run",
+           "--directory", "/path/to/talky-talky",
+           "--extra", "maya1",
+           "--extra", "chatterbox",
+           "--extra", "xtts",
+           "--extra", "kokoro",
+           "--extra", "vibevoice",
+           "talky-talky"
+         ]
+       }
+     }
+   }
+   ```
+
+4. Replace paths with actual values and restart Claude Desktop.
+
+### Claude Code / CLI Tools
+
+CLI tools inherit the shell PATH, so you can use `uv` directly. Add to `.mcp.json` or `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "talky-talky": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
+    }
+  }
+}
+```
+
+### Linux with CUDA
+
+On Linux with CUDA GPU, you can use `--extra tts` to include all engines:
+
+```json
+{
+  "mcpServers": {
+    "talky-talky": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
+    }
+  }
+}
+```
+
 ## Development Notes
 
 - **This project uses `uv`** for package management and running Python
