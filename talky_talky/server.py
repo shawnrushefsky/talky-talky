@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Talky Talky - Text-to-Speech MCP Server for AI Agents.
+"""Talky Talky - Text-to-Speech and Speech-to-Text MCP Server for AI Agents.
 
-This MCP server provides TTS capabilities with pluggable engine support:
+This MCP server provides TTS and transcription capabilities with pluggable engine support:
+
+TTS Engines:
 - Maya1: Text-prompted voice design (describe the voice you want)
 - Chatterbox: Audio-prompted voice cloning (clone from reference audio)
 - Chatterbox Turbo: Fast voice cloning optimized for production
@@ -12,6 +14,10 @@ This MCP server provides TTS capabilities with pluggable engine support:
 - VibeVoice Realtime: Real-time TTS with ~300ms latency (Microsoft)
 - VibeVoice Long-form: Long-form multi-speaker TTS up to 90 minutes (Microsoft)
 - CosyVoice3: Zero-shot multilingual voice cloning with 9 languages (Alibaba)
+
+Transcription Engines:
+- Whisper: OpenAI's robust speech recognition (99+ languages)
+- Faster-Whisper: CTranslate2-optimized Whisper (4x faster)
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -45,6 +51,15 @@ from .tools.audio import (
     concatenate_audio,
     normalize_audio,
     is_ffmpeg_available,
+)
+
+# Import transcription module
+from .tools.transcription import (
+    check_transcription,
+    get_transcription_info,
+    get_available_engines as get_available_transcription_engines,
+    list_engines as list_transcription_engines,
+    transcribe,
 )
 
 
@@ -798,6 +813,272 @@ def play_audio(audio_path: str) -> dict:
             "status": "error",
             "message": f"Failed to play audio: {e}",
         }
+
+
+# ============================================================================
+# Transcription Tools
+# ============================================================================
+
+
+@mcp.tool()
+def check_transcription_availability() -> dict:
+    """Check if transcription engines are available and properly configured.
+
+    Returns detailed status including:
+    - Available engines
+    - Device info (CUDA/MPS/CPU)
+    - Setup instructions for unavailable engines
+    """
+    status = check_transcription()
+    return to_dict(status)
+
+
+@mcp.tool()
+def get_transcription_engines_info() -> dict:
+    """Get detailed information about all transcription engines.
+
+    Returns info for each engine including:
+    - Name and description
+    - Requirements and availability
+    - Supported languages and model sizes
+    - Engine-specific parameters
+    """
+    return get_transcription_info()
+
+
+@mcp.tool()
+def list_available_transcription_engines() -> dict:
+    """List transcription engines that are currently available (installed).
+
+    Returns:
+        Dict with list of available engine IDs and their basic info.
+    """
+    available = get_available_transcription_engines()
+    engines = list_transcription_engines()
+
+    return {
+        "available_engines": available,
+        "engines": {
+            engine_id: {
+                "name": info.name,
+                "description": info.description,
+                "supports_word_timestamps": info.supports_word_timestamps,
+            }
+            for engine_id, info in engines.items()
+            if engine_id in available
+        },
+    }
+
+
+@mcp.tool()
+def transcribe_audio(
+    audio_path: str,
+    engine: str = "faster_whisper",
+    language: Optional[str] = None,
+    model_size: str = "base",
+) -> dict:
+    """Transcribe audio to text using speech recognition.
+
+    Use this to verify TTS output or transcribe any audio file.
+    Supports 99+ languages with automatic language detection.
+
+    Args:
+        audio_path: Path to the audio file to transcribe.
+        engine: Transcription engine to use (default: "faster_whisper").
+            Options: "whisper", "faster_whisper"
+            - whisper: Best accuracy via transformers
+            - faster_whisper: 4x faster with same accuracy (recommended)
+        language: Language code (e.g., "en", "es", "ja"). Auto-detects if not specified.
+        model_size: Model size (default: "base").
+            Options: tiny, base, small, medium, large-v3, large-v3-turbo
+            Larger models = more accurate but slower.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - text: Full transcribed text
+        - segments: List of segments with timing info
+        - language: Detected/used language
+        - duration_seconds: Audio duration
+        - processing_time_ms: How long transcription took
+
+    Example:
+        # Verify TTS output contains expected text
+        result = transcribe_audio("generated_speech.wav")
+        if "hello world" in result["text"].lower():
+            print("TTS verification passed!")
+    """
+    result = transcribe(
+        audio_path=audio_path,
+        engine=engine,
+        language=language,
+        model_size=model_size,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def transcribe_with_timestamps(
+    audio_path: str,
+    engine: str = "faster_whisper",
+    language: Optional[str] = None,
+    model_size: str = "base",
+    word_level: bool = False,
+) -> dict:
+    """Transcribe audio with detailed timing information.
+
+    Returns segment-level or word-level timestamps for precise alignment.
+    Useful for subtitles, karaoke, or audio analysis.
+
+    Args:
+        audio_path: Path to the audio file to transcribe.
+        engine: Transcription engine ("whisper" or "faster_whisper").
+        language: Language code (auto-detected if not specified).
+        model_size: Model size (tiny, base, small, medium, large-v3, etc.)
+        word_level: If True, include word-level timestamps (slower but more precise).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - text: Full transcribed text
+        - segments: List of segments, each containing:
+            - text: Segment text
+            - start: Start time in seconds
+            - end: End time in seconds
+            - words: (if word_level=True) List of words with timing
+        - language: Detected language
+        - duration_seconds: Audio duration
+
+    Note: Word-level timestamps are more accurate with faster_whisper engine.
+    """
+    # Set appropriate parameters for each engine
+    if engine == "faster_whisper":
+        result = transcribe(
+            audio_path=audio_path,
+            engine=engine,
+            language=language,
+            model_size=model_size,
+            word_timestamps=word_level,
+            vad_filter=True,
+        )
+    else:
+        # Whisper via transformers
+        result = transcribe(
+            audio_path=audio_path,
+            engine=engine,
+            language=language,
+            model_size=model_size,
+            return_timestamps="word" if word_level else True,
+        )
+    return to_dict(result)
+
+
+@mcp.tool()
+def verify_tts_output(
+    audio_path: str,
+    expected_text: str,
+    engine: str = "faster_whisper",
+    model_size: str = "base",
+    similarity_threshold: float = 0.8,
+) -> dict:
+    """Verify that TTS-generated audio contains the expected text.
+
+    Transcribes the audio and compares it to the expected text.
+    Useful for automated testing of TTS output quality.
+
+    Args:
+        audio_path: Path to the TTS-generated audio file.
+        expected_text: The text that should be in the audio.
+        engine: Transcription engine to use (default: "faster_whisper").
+        model_size: Model size (default: "base"). Use "large-v3" for best accuracy.
+        similarity_threshold: Minimum similarity ratio to consider a match (0.0-1.0).
+            Default 0.8 (80% similar). Lower for lenient matching.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - verified: True if transcription matches expected text
+        - similarity: Similarity ratio (0.0 to 1.0)
+        - expected_text: The expected text (normalized)
+        - transcribed_text: What was actually transcribed (normalized)
+        - match_details: Additional matching information
+
+    Example:
+        # After generating TTS audio
+        result = verify_tts_output(
+            audio_path="greeting.wav",
+            expected_text="Hello, how are you today?",
+        )
+        if result["verified"]:
+            print("TTS output verified successfully!")
+    """
+    from difflib import SequenceMatcher
+
+    # Transcribe the audio
+    transcription_result = transcribe(
+        audio_path=audio_path,
+        engine=engine,
+        model_size=model_size,
+    )
+
+    if transcription_result.status == "error":
+        return {
+            "status": "error",
+            "verified": False,
+            "error": transcription_result.error,
+        }
+
+    # Normalize texts for comparison
+    def normalize_text(text: str) -> str:
+        """Normalize text for comparison."""
+        import re
+
+        # Convert to lowercase
+        text = text.lower()
+        # Remove punctuation except apostrophes
+        text = re.sub(r"[^\w\s']", "", text)
+        # Collapse multiple spaces
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
+    expected_normalized = normalize_text(expected_text)
+    transcribed_normalized = normalize_text(transcription_result.text)
+
+    # Calculate similarity
+    matcher = SequenceMatcher(None, expected_normalized, transcribed_normalized)
+    similarity = matcher.ratio()
+
+    # Check for exact word match (more lenient than character-level)
+    expected_words = set(expected_normalized.split())
+    transcribed_words = set(transcribed_normalized.split())
+    word_overlap = len(expected_words & transcribed_words) / max(len(expected_words), 1)
+
+    # Use the higher of the two similarity measures
+    effective_similarity = max(similarity, word_overlap)
+
+    verified = effective_similarity >= similarity_threshold
+
+    return {
+        "status": "success",
+        "verified": verified,
+        "similarity": round(effective_similarity, 3),
+        "character_similarity": round(similarity, 3),
+        "word_overlap": round(word_overlap, 3),
+        "expected_text": expected_normalized,
+        "transcribed_text": transcribed_normalized,
+        "threshold": similarity_threshold,
+        "match_details": {
+            "expected_word_count": len(expected_words),
+            "transcribed_word_count": len(transcribed_words),
+            "matching_words": len(expected_words & transcribed_words),
+        },
+        "transcription_metadata": {
+            "engine": engine,
+            "model_size": model_size,
+            "language": transcription_result.language,
+            "processing_time_ms": transcription_result.processing_time_ms,
+        },
+    }
 
 
 # ============================================================================

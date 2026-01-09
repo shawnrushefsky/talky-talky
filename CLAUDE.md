@@ -4,7 +4,7 @@ This document provides context for Claude Code and other AI assistants working o
 
 ## Project Overview
 
-Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speech capabilities for AI agents. It features a pluggable engine architecture supporting multiple TTS backends:
+Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speech and Speech-to-Text capabilities for AI agents. It features a pluggable engine architecture supporting multiple TTS and transcription backends:
 
 - **Maya1**: Text-prompted voice design - create unique voices from natural language descriptions
 - **Chatterbox**: Audio-prompted voice cloning - clone voices from reference audio samples
@@ -16,6 +16,10 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **VibeVoice Realtime**: Real-time TTS with ~300ms latency, single speaker (Microsoft, 0.5B)
 - **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
 - **CosyVoice3**: Zero-shot multilingual voice cloning with 9 languages (Alibaba, 0.5B)
+
+**Transcription Engines (Speech-to-Text):**
+- **Whisper**: OpenAI's robust speech recognition via transformers (99+ languages, MIT license)
+- **Faster-Whisper**: CTranslate2-optimized Whisper (4x faster, same accuracy)
 
 Plus audio utilities for format conversion, concatenation, and normalization.
 
@@ -37,6 +41,9 @@ Plus audio utilities for format conversion, concatenation, and normalization.
   - VibeVoice Realtime (local) - real-time TTS with ~300ms latency
   - VibeVoice Long-form (local) - multi-speaker long-form TTS
   - CosyVoice3 (local) - multilingual voice cloning with instruction control
+- **Transcription Engines**:
+  - Whisper (local) - OpenAI's speech recognition via transformers
+  - Faster-Whisper (local) - CTranslate2-optimized, 4x faster
 
 ### Python Version Requirement
 
@@ -63,25 +70,30 @@ talky_talky/
 ├── tools/
 │   ├── __init__.py
 │   ├── audio.py          # Audio utilities (convert, concat, info)
-│   └── tts/
+│   ├── tts/
+│   │   ├── __init__.py   # Public interface, engine registry
+│   │   ├── base.py       # Abstract engine interfaces
+│   │   ├── utils.py      # Shared utilities (chunking, tag conversion)
+│   │   ├── maya1.py      # Maya1 engine implementation
+│   │   ├── chatterbox.py # Chatterbox engine implementation
+│   │   ├── chatterbox_turbo.py # Chatterbox Turbo engine
+│   │   ├── mira.py       # MiraTTS engine implementation
+│   │   ├── xtts.py       # XTTS-v2 engine implementation
+│   │   ├── kokoro.py     # Kokoro engine (voice selection)
+│   │   ├── soprano.py    # Soprano engine (ultra-fast)
+│   │   ├── vibevoice.py  # VibeVoice engines (realtime + long-form)
+│   │   └── cosyvoice.py  # CosyVoice3 engine (multilingual)
+│   └── transcription/
 │       ├── __init__.py   # Public interface, engine registry
-│       ├── base.py       # Abstract engine interfaces
-│       ├── utils.py      # Shared utilities (chunking, tag conversion)
-│       ├── maya1.py      # Maya1 engine implementation
-│       ├── chatterbox.py # Chatterbox engine implementation
-│       ├── chatterbox_turbo.py # Chatterbox Turbo engine
-│       ├── mira.py       # MiraTTS engine implementation
-│       ├── xtts.py       # XTTS-v2 engine implementation
-│       ├── kokoro.py     # Kokoro engine (voice selection)
-│       ├── soprano.py    # Soprano engine (ultra-fast)
-│       ├── vibevoice.py  # VibeVoice engines (realtime + long-form)
-│       └── cosyvoice.py  # CosyVoice3 engine (multilingual)
+│       ├── base.py       # Abstract transcription interfaces
+│       ├── whisper.py    # Whisper engine (transformers)
+│       └── faster_whisper.py # Faster-Whisper engine (CTranslate2)
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
 ```
 
-### Engine Architecture
+### TTS Engine Architecture
 
 The TTS module uses a pluggable engine architecture:
 
@@ -96,6 +108,24 @@ VoiceSelectionEngine   # For voice selection engines (Kokoro)
 register_engine(MyEngine)  # Register new engines
 get_engine("maya1")        # Get engine by ID
 generate(text, output, engine="maya1", **kwargs)  # Unified generation
+```
+
+### Transcription Engine Architecture
+
+The transcription module mirrors the TTS architecture:
+
+```python
+# Base classes in transcription/base.py
+TranscriptionEngine     # Abstract base for all transcription engines
+TranscriptionResult     # Result dataclass with text, segments, metadata
+TranscriptionSegment    # Individual segment with timestamps
+WordSegment             # Word-level timestamps (when supported)
+TranscriptionEngineInfo # Engine metadata and capabilities
+
+# Registry in transcription/__init__.py
+register_engine(MyEngine)  # Register new engines
+get_engine("faster_whisper")  # Get engine by ID
+transcribe(audio_path, engine="faster_whisper", **kwargs)  # Unified transcription
 ```
 
 ### Adding New TTS Engines
@@ -412,6 +442,14 @@ print(result)
 - `set_output_directory` - Set default directory for saving audio files
 - `get_output_directory` - Get current default output directory
 
+### Transcription Tools
+- `check_transcription_availability` - Check transcription engine status and device info
+- `get_transcription_engines_info` - Get detailed info about all transcription engines
+- `list_available_transcription_engines` - List installed transcription engines
+- `transcribe_audio` - Transcribe audio file to text
+- `transcribe_with_timestamps` - Transcribe with word-level timestamps
+- `verify_tts_output` - Verify TTS audio matches expected text (for agent verification)
+
 ## TTS Engines
 
 ### Maya1 (Voice Design)
@@ -627,6 +665,90 @@ pip install -r requirements.txt
 - `"请用广东话表达。"` - Speak in Cantonese
 - `"请用尽可能快地语速说。"` - Speak as fast as possible
 
+## Transcription Engines
+
+### Whisper (via Transformers)
+
+OpenAI's state-of-the-art speech recognition model via the transformers library.
+
+**Installation:**
+```bash
+pip install transformers torch
+# Or with talky-talky:
+pip install talky-talky[whisper]
+```
+
+**Features:**
+- 99+ languages with automatic detection
+- Word-level timestamps
+- Works on CUDA, MPS, and CPU
+- Best accuracy among open-source models
+
+**Model Sizes:**
+
+| Model | Parameters | VRAM | Relative Speed |
+|-------|-----------|------|----------------|
+| tiny | 39M | ~1GB | 32x |
+| base | 74M | ~1GB | 16x |
+| small | 244M | ~2GB | 6x |
+| medium | 769M | ~5GB | 2x |
+| large-v3 | 1550M | ~10GB | 1x |
+| large-v3-turbo | 809M | ~6GB | 8x |
+
+**Parameters:**
+- `model_size`: Model size (default: "base")
+- `language`: Language code or None for auto-detection
+- `return_timestamps`: True for segments, "word" for word-level
+
+**Recommended Models:**
+- **Development/Testing**: base (fast, decent accuracy)
+- **Production**: large-v3-turbo (best speed/accuracy balance)
+- **Maximum Accuracy**: large-v3
+
+### Faster-Whisper (CTranslate2)
+
+CTranslate2-optimized Whisper implementation - 4x faster with same accuracy.
+
+**Installation:**
+```bash
+pip install faster-whisper
+# Or with talky-talky:
+pip install talky-talky[faster-whisper]
+```
+
+**Features:**
+- 4x faster than original Whisper
+- Lower memory usage through quantization
+- Word-level timestamps with VAD filtering
+- Batched inference support
+
+**Model Sizes:**
+
+| Model | Parameters | VRAM | Speed vs large |
+|-------|-----------|------|----------------|
+| tiny | 39M | ~1GB | 32x |
+| base | 74M | ~1GB | 16x |
+| small | 244M | ~2GB | 6x |
+| medium | 769M | ~5GB | 2x |
+| large-v3 | 1550M | ~10GB | 1x |
+| large-v3-turbo | 809M | ~6GB | 8x |
+| distil-large-v3 | 756M | ~4GB | 6x |
+
+**Parameters:**
+- `model_size`: Model size (default: "base")
+- `language`: Language code or None for auto-detection
+- `word_timestamps`: Enable word-level timestamps
+- `vad_filter`: Filter silence using VAD (default: True)
+- `beam_size`: Beam size for decoding (default: 5)
+
+**English-Only Models:**
+For English transcription, use .en models (e.g., "base.en") for slightly better accuracy.
+
+**Hardware Support:**
+- **NVIDIA GPU with CUDA**: Best performance (float16)
+- **CPU**: Good performance with int8 quantization
+- **Apple Silicon**: Uses CPU (MPS not directly supported by CTranslate2)
+
 ## Installation & Setup
 
 ```bash
@@ -659,6 +781,15 @@ pip install -e ".[tts]"
 git clone https://github.com/microsoft/VibeVoice.git && cd VibeVoice && pip install -e .
 # CosyVoice:
 git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && pip install -r requirements.txt
+
+# Install with Whisper transcription support (via transformers)
+pip install -e ".[whisper]"
+
+# Install with Faster-Whisper transcription support (4x faster)
+pip install -e ".[faster-whisper]"
+
+# Install all transcription engines
+pip install -e ".[transcription]"
 
 # Install development dependencies
 pip install -e ".[dev]"

@@ -11,9 +11,23 @@ dependencies = [
     # Audio processing
     "pydub>=0.25.0",
     "soundfile>=0.12.0",
+    "numpy>=1.26.0",  # Ensure compatible numpy for Python 3.12+
 ]
 
 [project.optional-dependencies]
+# Whisper transcription (via transformers - best accuracy)
+whisper = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+]
+# Faster-Whisper transcription (CTranslate2 optimized - 4x faster)
+faster-whisper = [
+    "faster-whisper>=1.0.0",
+]
+# All transcription engines
+transcription = [
+    "talky-talky[whisper,faster-whisper]",
+]
 # Maya1 TTS support (voice design from descriptions)
 maya1 = [
     "torch>=2.0.0",
