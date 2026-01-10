@@ -7,7 +7,7 @@ across 8 languages. Uses voice IDs to select from the available voices.
 import sys
 from pathlib import Path
 
-from .base import VoiceSelectionEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import VoiceSelectionEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import redirect_stdout_to_stderr
 
 
@@ -295,6 +295,26 @@ class KokoroEngine(VoiceSelectionEngine):
                 "languages": list(LANGUAGES.keys()),
                 "total_voices": len(VOICES),
                 "default_voice": DEFAULT_VOICE,
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=50.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="Very fast due to 82M lightweight model. Minimal VRAM required.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=30.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Excellent performance on Apple Silicon due to small model size.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=5.0,
+                    device_type="cpu",
+                    reference_hardware="Intel i9-12900K",
+                    notes="Lightweight model runs efficiently on CPU.",
+                ),
             },
         )
 

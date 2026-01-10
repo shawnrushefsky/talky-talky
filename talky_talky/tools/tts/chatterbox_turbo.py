@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import (
     convert_angle_to_bracket_tags,
     split_text_into_chunks,
@@ -218,6 +218,26 @@ class ChatterboxTurboEngine(AudioPromptedEngine):
                     },
                 ],
             ),
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=8.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~4GB VRAM used. Faster than standard Chatterbox due to smaller model.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=3.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Good performance on Apple Silicon. Faster than standard Chatterbox.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.3,
+                    device_type="cpu",
+                    reference_hardware="AMD Ryzen 9 5900X",
+                    notes="Slow but functional. GPU strongly recommended.",
+                ),
+            },
         )
 
     def get_setup_instructions(self) -> str:

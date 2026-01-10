@@ -38,6 +38,21 @@ class PromptingGuide:
 
 
 @dataclass
+class SpeedEstimate:
+    """Speed estimate for a TTS engine on a specific device type.
+
+    The realtime_factor indicates how fast the engine generates audio relative
+    to the audio duration. For example, a realtime_factor of 10.0 means the
+    engine generates 10 seconds of audio in 1 second of wall-clock time.
+    """
+
+    realtime_factor: float  # 10.0 = generates 10s audio in 1s (10x realtime)
+    device_type: str  # "cuda", "mps", "cpu"
+    reference_hardware: str  # e.g., "RTX 4090", "M1 Max", "Ryzen 9 5900X"
+    notes: str = ""  # Additional context, e.g., "First generation slower due to model loading"
+
+
+@dataclass
 class EngineInfo:
     """Information about a TTS engine."""
 
@@ -53,6 +68,8 @@ class EngineInfo:
     emotion_tags: list[str] = field(default_factory=list)
     prompting_guide: Optional[PromptingGuide] = None
     extra_info: dict = field(default_factory=dict)
+    # Speed estimates keyed by device_type ("cuda", "mps", "cpu")
+    speed_estimates: dict[str, SpeedEstimate] = field(default_factory=dict)
 
 
 class TTSEngine(ABC):

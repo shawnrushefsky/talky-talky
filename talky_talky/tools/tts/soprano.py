@@ -7,7 +7,7 @@ Soprano-80M is an ultra-lightweight, extremely fast TTS model with
 import sys
 from pathlib import Path
 
-from .base import TTSEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import TTSEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import get_best_device, redirect_stdout_to_stderr
 
 
@@ -169,6 +169,15 @@ class SopranoEngine(TTSEngine):
                 "realtime_factor": "2000x",
                 "streaming_latency": "<15ms",
                 "device_requirement": "CUDA only",
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=2000.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="Ultra-fast 80M model. Generates 10 hours of audio in <20 seconds.",
+                ),
+                # MPS and CPU not supported
             },
         )
 

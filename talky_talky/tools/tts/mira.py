@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import (
     split_text_into_chunks,
     get_best_device,
@@ -301,6 +301,15 @@ class MiraEngine(AudioPromptedEngine):
                     },
                 ],
             ),
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=100.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~6GB VRAM used. 100x+ realtime with batching. CUDA required.",
+                ),
+                # MPS and CPU not supported - ncodec requires CUDA
+            },
         )
 
     def get_setup_instructions(self) -> str:

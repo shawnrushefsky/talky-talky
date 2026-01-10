@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import (
     split_text_into_chunks,
     get_best_device,
@@ -281,6 +281,26 @@ class XTTSEngine(AudioPromptedEngine):
                     },
                 ],
             ),
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=3.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~6GB VRAM used. First generation slower due to model loading.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=1.5,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="MPS support may require manual device handling.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.3,
+                    device_type="cpu",
+                    reference_hardware="AMD Ryzen 9 5900X",
+                    notes="Slow but functional. GPU recommended for production use.",
+                ),
+            },
         )
 
     def get_setup_instructions(self) -> str:

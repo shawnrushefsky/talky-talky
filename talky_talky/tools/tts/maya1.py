@@ -7,7 +7,7 @@ Supports inline emotion tags like <laugh>, <sigh>, <angry>.
 import sys
 from pathlib import Path
 
-from .base import TextPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import TextPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import (
     convert_bracket_to_angle_tags,
     split_text_into_chunks,
@@ -431,6 +431,26 @@ class Maya1Engine(TextPromptedEngine):
                 "default_description": DEFAULT_DESCRIPTION,
                 "license": "Apache-2.0",
                 "license_url": "https://huggingface.co/maya-research/maya1",
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=3.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~8GB VRAM used. First generation slower due to model loading.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=1.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Approximately realtime. May vary with Metal Performance Shaders load.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.1,
+                    device_type="cpu",
+                    reference_hardware="AMD Ryzen 9 5900X",
+                    notes="Very slow. GPU strongly recommended.",
+                ),
             },
         )
 

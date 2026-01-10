@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import (
     convert_angle_to_bracket_tags,
     split_text_into_chunks,
@@ -181,6 +181,26 @@ class ChatterboxEngine(AudioPromptedEngine):
                     "That's hilarious! [laugh] I love it.",
                     "Sorry [cough] excuse me, where was I?",
                 ],
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=5.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~6GB VRAM used. First generation slower due to model loading.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=2.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Good performance on Apple Silicon. May use unified memory.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.2,
+                    device_type="cpu",
+                    reference_hardware="AMD Ryzen 9 5900X",
+                    notes="Slow but functional. GPU strongly recommended.",
+                ),
             },
             prompting_guide=PromptingGuide(
                 overview=(

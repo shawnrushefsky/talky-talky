@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .base import TextPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import TextPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import split_text_into_chunks, get_best_device, redirect_stdout_to_stderr
 
 
@@ -189,6 +189,26 @@ class VibeVoiceRealtimeEngine(TextPromptedEngine):
                 "latency": "~300ms to first audio",
                 "languages": ["en"],
                 "experimental_languages": ["de", "fr", "it", "ja", "ko", "nl", "pl", "pt", "es"],
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=15.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~2-4GB VRAM used. ~300ms first-audio latency, then fast streaming.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=8.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Good performance on Apple Silicon for real-time use.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=1.5,
+                    device_type="cpu",
+                    reference_hardware="Intel i9-12900K",
+                    notes="0.5B model runs reasonably well on CPU.",
+                ),
             },
         )
 
@@ -410,6 +430,26 @@ class VibeVoiceLongformEngine(TextPromptedEngine):
                 "parameters": "1.5B (3B total with tokenizers)",
                 "max_speakers": 4,
                 "languages": ["en", "zh"],
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=10.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~6-8GB VRAM used. Optimized for long-form content up to 90 minutes.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=5.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Good performance on Apple Silicon. May use significant unified memory.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.5,
+                    device_type="cpu",
+                    reference_hardware="Intel i9-12900K",
+                    notes="1.5B model is slow on CPU. GPU strongly recommended.",
+                ),
             },
         )
 

@@ -31,6 +31,7 @@ from .base import (
     TTSEngine,
     TTSResult,
     EngineInfo,
+    SpeedEstimate,
     TextPromptedEngine,
     AudioPromptedEngine,
     VoiceSelectionEngine,
@@ -123,6 +124,60 @@ def get_available_engines() -> list[str]:
         if engine.is_available():
             available.append(engine_id)
     return available
+
+
+def get_engine_speed_for_current_device(engine_id: str) -> Optional[SpeedEstimate]:
+    """Get the speed estimate for an engine on the current device.
+
+    Args:
+        engine_id: The engine identifier (e.g., 'maya1', 'chatterbox')
+
+    Returns:
+        SpeedEstimate for the current device type, or None if not available
+    """
+    engine = get_engine(engine_id)
+    info = engine.get_info()
+
+    if not info.speed_estimates:
+        return None
+
+    # Get current device type
+    device, _, _ = get_best_device()
+
+    # Try to get estimate for current device, falling back to CPU if not found
+    if device in info.speed_estimates:
+        return info.speed_estimates[device]
+
+    # If current device not found but CPU estimate exists, return that with a note
+    if "cpu" in info.speed_estimates:
+        return info.speed_estimates["cpu"]
+
+    return None
+
+
+def get_all_engine_speeds() -> dict[str, Optional[dict]]:
+    """Get speed estimates for all engines on the current device.
+
+    Returns:
+        Dict mapping engine_id to speed estimate dict (or None if unavailable)
+    """
+    device, device_name, _ = get_best_device()
+    result = {}
+
+    for engine_id in _engine_registry:
+        estimate = get_engine_speed_for_current_device(engine_id)
+        if estimate:
+            result[engine_id] = {
+                "realtime_factor": estimate.realtime_factor,
+                "device_type": estimate.device_type,
+                "reference_hardware": estimate.reference_hardware,
+                "notes": estimate.notes,
+                "matches_current_device": estimate.device_type == device,
+            }
+        else:
+            result[engine_id] = None
+
+    return result
 
 
 # ============================================================================
@@ -238,8 +293,10 @@ def check_tts() -> TTSStatus:
 def get_tts_info() -> dict:
     """Get detailed information about all TTS engines.
 
-    Returns comprehensive info for agent consumption.
+    Returns comprehensive info for agent consumption, including speed
+    estimates for the current device.
     """
+    device, device_name, _ = get_best_device()
     engines_info = {}
 
     for engine_id in _engine_registry:
@@ -264,9 +321,37 @@ def get_tts_info() -> dict:
         if info.prompting_guide:
             engine_data["prompting_guide"] = asdict(info.prompting_guide)
 
+        # Include speed estimate for current device
+        speed_estimate = get_engine_speed_for_current_device(engine_id)
+        if speed_estimate:
+            engine_data["speed_estimate"] = {
+                "realtime_factor": speed_estimate.realtime_factor,
+                "device_type": speed_estimate.device_type,
+                "reference_hardware": speed_estimate.reference_hardware,
+                "notes": speed_estimate.notes,
+                "matches_current_device": speed_estimate.device_type == device,
+            }
+
+        # Include all speed estimates for reference
+        if info.speed_estimates:
+            engine_data["all_speed_estimates"] = {
+                dev: {
+                    "realtime_factor": est.realtime_factor,
+                    "reference_hardware": est.reference_hardware,
+                    "notes": est.notes,
+                }
+                for dev, est in info.speed_estimates.items()
+            }
+
         engines_info[engine_id] = engine_data
 
-    return {"engines": engines_info}
+    return {
+        "current_device": {
+            "type": device,
+            "name": device_name,
+        },
+        "engines": engines_info,
+    }
 
 
 # ============================================================================
@@ -294,6 +379,7 @@ __all__ = [
     "TTSEngine",
     "TTSResult",
     "EngineInfo",
+    "SpeedEstimate",
     "TextPromptedEngine",
     "AudioPromptedEngine",
     "VoiceSelectionEngine",
@@ -303,6 +389,9 @@ __all__ = [
     "get_engine",
     "list_engines",
     "get_available_engines",
+    # Speed estimates
+    "get_engine_speed_for_current_device",
+    "get_all_engine_speeds",
     # Generation
     "generate",
     # Status

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide
+from .base import AudioPromptedEngine, TTSResult, EngineInfo, PromptingGuide, SpeedEstimate
 from .utils import get_best_device, redirect_stdout_to_stderr
 
 
@@ -264,6 +264,26 @@ class CosyVoice3Engine(AudioPromptedEngine):
                     "text normalization",
                     "bi-streaming (text-in, audio-out)",
                 ],
+            },
+            speed_estimates={
+                "cuda": SpeedEstimate(
+                    realtime_factor=8.0,
+                    device_type="cuda",
+                    reference_hardware="RTX 4090 (24GB)",
+                    notes="~4-6GB VRAM used. Zero-shot cloning with 9 language support.",
+                ),
+                "mps": SpeedEstimate(
+                    realtime_factor=3.0,
+                    device_type="mps",
+                    reference_hardware="Apple M1 Max (32GB)",
+                    notes="Reasonable performance on Apple Silicon.",
+                ),
+                "cpu": SpeedEstimate(
+                    realtime_factor=0.4,
+                    device_type="cpu",
+                    reference_hardware="Intel i9-12900K",
+                    notes="0.5B model is slow on CPU. GPU recommended.",
+                ),
             },
         )
 
